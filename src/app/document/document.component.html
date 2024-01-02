@@ -1,0 +1,10 @@
+<h1>{{ doc.name }}</h1>
+<ngx-codemirror
+  [ngModel]="content()"
+  (ngModelChange)="content.set($event)"
+  [options]="{
+    lineNumbers: true,
+    theme: 'material',
+    mode: 'markdown'
+  }"
+></ngx-codemirror>

@@ -8,6 +8,6 @@ type Operation = {
 export type OperationWrapper = {
   docId: string;
   revision: number;
-  performedBy: string;
+  ackTo: string;
   operation: Operation;
 };

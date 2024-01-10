@@ -48,6 +48,8 @@ export class DocumentComponent implements AfterViewInit {
   // All local changes sent to the server but have not been acknowledged
   sentChangesQueue = new Queue<OperationWrapper>();
 
+  startedSendingEvents = false;
+
   constructor() {}
 
   ngAfterViewInit(): void {
@@ -73,6 +75,7 @@ export class DocumentComponent implements AfterViewInit {
 
           this.socket.on('operation', (opStr: string) => {
             const op: OperationWrapper = JSON.parse(opStr);
+
             console.log('socket operation response:', op);
 
             const currentDoc = this.doc$.value as Document;
@@ -96,14 +99,6 @@ export class DocumentComponent implements AfterViewInit {
                 },
               });
             }
-
-            this.socket.emit(
-              'operation',
-              this.pendingChangesQueue.dequeue(),
-              (ackData: OperationWrapper[]) => {
-                console.log('Acknowledgment from server:', ackData);
-              }
-            );
           });
 
           this.listenChangesExtension = StateField.define({
@@ -131,6 +126,29 @@ export class DocumentComponent implements AfterViewInit {
           });
         });
     });
+  }
+
+  ackHandler() {
+    return (ackData: { revision: number }) => {
+      console.log('Acknowledgment from server:', ackData);
+
+      const doc = this.doc$.value as Document;
+      this.doc$.next({
+        ...doc,
+        revision: ackData.revision,
+      });
+
+      if (this.pendingChangesQueue.isEmpty()) {
+        this.startedSendingEvents = false;
+        return;
+      }
+
+      this.socket.emit(
+        'operation',
+        this.pendingChangesQueue.dequeue(),
+        this.ackHandler()
+      );
+    };
   }
 
   listenChangesUpdate(value: number, transaction: Transaction, doc: Document) {
@@ -174,7 +192,7 @@ export class DocumentComponent implements AfterViewInit {
         const opDelete: OperationWrapper = {
           docId: doc.id,
           revision: doc.revision,
-          performedBy: 'toske',
+          ackTo: 'toske',
           operation: {
             type: 'delete',
             operand: null,
@@ -186,7 +204,7 @@ export class DocumentComponent implements AfterViewInit {
         const opInsert: OperationWrapper = {
           docId: doc.id,
           revision: doc.revision,
-          performedBy: 'toske',
+          ackTo: 'toske',
           operation: {
             type: 'insert',
             operand: text!,
@@ -200,13 +218,20 @@ export class DocumentComponent implements AfterViewInit {
         this.pendingChangesQueue.enqueue(opDelete);
         this.pendingChangesQueue.enqueue(opInsert);
 
-        this.socket.emit('operation', opDelete);
-        this.socket.emit('operation', opInsert);
+        if (!this.startedSendingEvents) {
+          this.startedSendingEvents = true;
+
+          this.socket.emit(
+            'operation',
+            this.pendingChangesQueue.dequeue(),
+            this.ackHandler()
+          );
+        }
       } else {
-        const insertOperation: OperationWrapper = {
+        const operation: OperationWrapper = {
           docId: doc.id,
           revision: doc.revision,
-          performedBy: 'toske',
+          ackTo: 'toske',
           operation: {
             type: type,
             operand: text ?? null,
@@ -219,8 +244,18 @@ export class DocumentComponent implements AfterViewInit {
           },
         };
 
-        console.log(insertOperation);
-        this.socket.emit('operation', insertOperation);
+        this.pendingChangesQueue.enqueue(operation);
+        console.log(operation);
+
+        if (!this.startedSendingEvents) {
+          this.startedSendingEvents = true;
+
+          this.socket.emit(
+            'operation',
+            this.pendingChangesQueue.dequeue(),
+            this.ackHandler()
+          );
+        }
       }
     }
 

@@ -1,3 +1,5 @@
+import { Document } from './document.model';
+
 type Operation = {
   type: 'insert' | 'delete';
   operand: string | null;
@@ -11,3 +13,5 @@ export type OperationWrapper = {
   ackTo: string;
   operation: Operation;
 };
+
+export type OperationAck = Pick<Document, 'revision'>;

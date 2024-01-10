@@ -1,4 +1,4 @@
-import { OperationWrapper } from './transforms';
+import { OperationAck, OperationWrapper } from './transforms';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -7,6 +7,7 @@ import {
   ElementRef,
   ViewChild,
   inject,
+  signal,
 } from '@angular/core';
 export class AppModule {}
 import { Document } from './document.model';
@@ -17,7 +18,6 @@ import { basicSetup } from 'codemirror';
 import io, { Socket } from 'socket.io-client';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { Queue } from '../queue';
 
@@ -35,7 +35,13 @@ export class DocumentComponent implements AfterViewInit {
 
   @ViewChild('codeMirror') private cm!: ElementRef<HTMLDivElement>;
 
-  doc$ = new BehaviorSubject<Document | null>(null);
+  doc = signal<Document>({
+    id: '',
+    content: 'Loading...',
+    name: 'Loading...',
+    revision: 1,
+  });
+
   socket!: Socket;
 
   view!: EditorView;
@@ -59,7 +65,7 @@ export class DocumentComponent implements AfterViewInit {
       this.http
         .get<Document>(`http://localhost:8080/doc/${id}`)
         .subscribe((doc) => {
-          this.doc$.next(doc);
+          this.doc.set(doc);
 
           console.log(doc);
 
@@ -78,11 +84,7 @@ export class DocumentComponent implements AfterViewInit {
 
             console.log('socket operation response:', op);
 
-            const currentDoc = this.doc$.value as Document;
-            this.doc$.next({
-              ...currentDoc,
-              revision: currentDoc.revision,
-            });
+            this.doc.update((doc) => ({ ...doc!, revision: op.revision }));
 
             if (op.operation.type === 'insert') {
               this.view.dispatch({
@@ -104,7 +106,7 @@ export class DocumentComponent implements AfterViewInit {
           this.listenChangesExtension = StateField.define({
             create: () => 0,
             update: (value, transaction) =>
-              this.listenChangesUpdate(value, transaction, doc),
+              this.listenChangesUpdate(value, transaction),
           });
 
           try {
@@ -129,12 +131,13 @@ export class DocumentComponent implements AfterViewInit {
   }
 
   ackHandler() {
-    return (ackData: { revision: number }) => {
+    return (ackData: OperationAck) => {
       console.log('Acknowledgment from server:', ackData);
 
-      const doc = this.doc$.value as Document;
-      this.doc$.next({
-        ...doc,
+      this.doc.update((doc) => ({ ...doc!, revision: ackData.revision }));
+
+      console.log('Update:', {
+        ...this.doc(),
         revision: ackData.revision,
       });
 
@@ -151,13 +154,12 @@ export class DocumentComponent implements AfterViewInit {
     };
   }
 
-  listenChangesUpdate(value: number, transaction: Transaction, doc: Document) {
+  listenChangesUpdate(value: number, transaction: Transaction) {
     if (transaction.docChanged) {
       console.log(transaction);
       console.log(transaction.changes.desc);
 
-      //@ts-ignore
-      const annotation = transaction.annotations[0].value as string;
+      const annotation = (transaction as any).annotations[0].value as string;
       if (typeof annotation !== 'string') {
         return value;
       }
@@ -190,8 +192,8 @@ export class DocumentComponent implements AfterViewInit {
         selectionRange.to - selectionRange.from > 0
       ) {
         const opDelete: OperationWrapper = {
-          docId: doc.id,
-          revision: doc.revision,
+          docId: this.doc()!.id,
+          revision: this.doc()!.revision,
           ackTo: 'toske',
           operation: {
             type: 'delete',
@@ -202,8 +204,8 @@ export class DocumentComponent implements AfterViewInit {
         };
 
         const opInsert: OperationWrapper = {
-          docId: doc.id,
-          revision: doc.revision,
+          docId: this.doc()!.id,
+          revision: this.doc()!.revision,
           ackTo: 'toske',
           operation: {
             type: 'insert',
@@ -229,8 +231,8 @@ export class DocumentComponent implements AfterViewInit {
         }
       } else {
         const operation: OperationWrapper = {
-          docId: doc.id,
-          revision: doc.revision,
+          docId: this.doc()!.id,
+          revision: this.doc()!.revision,
           ackTo: 'toske',
           operation: {
             type: type,

@@ -19,6 +19,7 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { CommonModule } from '@angular/common';
+import { Queue } from '../queue';
 
 @Component({
   selector: 'app-document',
@@ -39,16 +40,17 @@ export class DocumentComponent implements AfterViewInit {
 
   view!: EditorView;
   state!: EditorState;
-  listenChangesExtension!: StateField<null>;
+  listenChangesExtension!: StateField<number>;
+
+  // All local changes which have not been sent to the server
+  pendingChangesQueue = new Queue<OperationWrapper>();
+
+  // All local changes sent to the server but have not been acknowledged
+  sentChangesQueue = new Queue<OperationWrapper>();
 
   constructor() {}
 
   ngAfterViewInit(): void {
-    setTimeout(() => {
-      console.log(this.cm.nativeElement);
-      console.log(this.state, this.view);
-    }, 1000);
-
     this.route.paramMap.subscribe((params) => {
       const id = params.get('id')!;
 
@@ -94,12 +96,20 @@ export class DocumentComponent implements AfterViewInit {
                 },
               });
             }
+
+            this.socket.emit(
+              'operation',
+              this.pendingChangesQueue.dequeue(),
+              (ackData: OperationWrapper[]) => {
+                console.log('Acknowledgment from server:', ackData);
+              }
+            );
           });
 
           this.listenChangesExtension = StateField.define({
-            create: () => null,
+            create: () => 0,
             update: (value, transaction) =>
-              this.listenChangesUpdate(transaction, doc),
+              this.listenChangesUpdate(value, transaction, doc),
           });
 
           try {
@@ -113,9 +123,6 @@ export class DocumentComponent implements AfterViewInit {
               ],
             });
           } catch (e) {
-            //Please make sure install codemirror@6.0.1
-            //If your command was npm install codemirror, will installed 6.65.1(whatever)
-            //You will be here.
             console.error(e);
           }
           this.view = new EditorView({
@@ -126,7 +133,7 @@ export class DocumentComponent implements AfterViewInit {
     });
   }
 
-  listenChangesUpdate(transaction: Transaction, doc: Document) {
+  listenChangesUpdate(value: number, transaction: Transaction, doc: Document) {
     if (transaction.docChanged) {
       console.log(transaction);
       console.log(transaction.changes.desc);
@@ -134,7 +141,7 @@ export class DocumentComponent implements AfterViewInit {
       //@ts-ignore
       const annotation = transaction.annotations[0].value as string;
       if (typeof annotation !== 'string') {
-        return null;
+        return value;
       }
 
       const text: string | undefined = (transaction.changes as any).inserted
@@ -190,10 +197,13 @@ export class DocumentComponent implements AfterViewInit {
 
         console.log({ opDelete, opInsert });
 
+        this.pendingChangesQueue.enqueue(opDelete);
+        this.pendingChangesQueue.enqueue(opInsert);
+
         this.socket.emit('operation', opDelete);
         this.socket.emit('operation', opInsert);
       } else {
-        const payload: OperationWrapper = {
+        const insertOperation: OperationWrapper = {
           docId: doc.id,
           revision: doc.revision,
           performedBy: 'toske',
@@ -208,12 +218,12 @@ export class DocumentComponent implements AfterViewInit {
               ),
           },
         };
-        console.log(payload);
-        this.socket.emit('operation', payload);
+
+        console.log(insertOperation);
+        this.socket.emit('operation', insertOperation);
       }
-      throw new Error('hah');
     }
 
-    return null;
+    return value + 1;
   }
 }

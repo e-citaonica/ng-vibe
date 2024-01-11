@@ -58,7 +58,7 @@ export class DocumentComponent implements AfterViewInit {
   pendingChangesQueue = new Queue<OperationWrapper[]>();
 
   // All local changes sent to the server but have not been acknowledged
-  sentChangesQueue = new Queue<OperationWrapper[]>();
+  // sentChangesQueue = new Queue<OperationWrapper[]>();
 
   startedSendingEvents = false;
 
@@ -116,19 +116,20 @@ export class DocumentComponent implements AfterViewInit {
     // }
   }
 
-  transformPendingChangesAgainstIncomingOperation(incomingOp: Operation) {
+  transformPendingChangesAgainstIncomingOperation(incoming: OperationWrapper) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
       const arr: OperationWrapper[] = [];
 
       for (const pendingOpWrapper of pendingOpWrappers) {
         const transformedOps = this.transform(
           pendingOpWrapper.operation,
-          incomingOp
+          incoming.operation
         );
 
         const transformedOpWrappers: OperationWrapper[] = transformedOps.map(
           (op) => ({
             ...pendingOpWrapper,
+            revision: incoming.revision,
             operation: op,
           })
         );

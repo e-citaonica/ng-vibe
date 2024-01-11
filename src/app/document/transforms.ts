@@ -1,6 +1,6 @@
 import { Document } from './document.model';
 
-type Operation = {
+export type Operation = {
   type: 'insert' | 'delete';
   operand: string | null;
   position: number;

@@ -40,7 +40,7 @@ export class Queue<T> {
           ? {
               value: this.queue[index++],
             }
-          : { done: true },
+          : { value: undefined as T, done: true },
     };
   }
 }

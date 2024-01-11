@@ -1,4 +1,4 @@
-import { Document } from './document.model';
+import { Document } from './document/document.model';
 
 export type Operation = {
   type: 'insert' | 'delete';
@@ -10,8 +10,15 @@ export type Operation = {
 export type OperationWrapper = {
   docId: string;
   revision: number;
-  ackTo: string;
+  performedBy: string;
   operation: Operation;
 };
 
 export type OperationAck = Pick<Document, 'revision'>;
+
+export type CursorPosition = {
+  docId: string;
+  from: number;
+  to: number;
+  performedBy: string;
+};

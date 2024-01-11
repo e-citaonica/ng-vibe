@@ -1,4 +1,4 @@
-import { Operation, OperationAck, OperationWrapper } from './transforms';
+import { Operation, OperationAck, OperationWrapper } from '../operations';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -6,6 +6,8 @@ import {
   Component,
   ElementRef,
   ViewChild,
+  computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -13,19 +15,20 @@ export class AppModule {}
 import { Document } from './document.model';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import {
-  ChangeSet,
   ChangeSpec,
   EditorState,
   StateField,
   Transaction,
+  TransactionSpec,
 } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
-import io, { Socket } from 'socket.io-client';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Queue } from '../queue';
+import { transformOperation } from '../transformations';
+import { SocketIoService } from '../socket-io.service';
 
 @Component({
   selector: 'app-document',
@@ -38,6 +41,7 @@ import { Queue } from '../queue';
 export class DocumentComponent implements AfterViewInit {
   http = inject(HttpClient);
   route = inject(ActivatedRoute);
+  socket = inject(SocketIoService);
 
   @ViewChild('codeMirror') private cm!: ElementRef<HTMLDivElement>;
 
@@ -47,8 +51,6 @@ export class DocumentComponent implements AfterViewInit {
     name: 'Loading...',
     revision: 1,
   });
-
-  socket!: Socket;
 
   view!: EditorView;
   state!: EditorState;
@@ -60,68 +62,18 @@ export class DocumentComponent implements AfterViewInit {
   // All local changes sent to the server but have not been acknowledged
   // sentChangesQueue = new Queue<OperationWrapper[]>();
 
+  pointers = new Map<string, number>();
+
   startedSendingEvents = false;
 
-  constructor() {
-    // this.pendingChangesQueue.enqueue({
-    //   ackTo: 'toske',
-    //   docId: 'id',
-    //   operation: {
-    //     type: 'insert',
-    //     operand: 'first',
-    //     length: 'first'.length,
-    //     position: 0,
-    //   },
-    //   revision: 1,
-    // });
-    // this.pendingChangesQueue.enqueue({
-    //   ackTo: 'toske',
-    //   docId: 'id',
-    //   operation: {
-    //     type: 'insert',
-    //     operand: 'second',
-    //     length: 'second'.length,
-    //     position: 5,
-    //   },
-    //   revision: 1,
-    // });
-    // this.pendingChangesQueue.enqueue({
-    //   ackTo: 'toske',
-    //   docId: 'id',
-    //   operation: {
-    //     type: 'delete',
-    //     operand: null,
-    //     length: 1,
-    //     position: 'firstsecond'.length,
-    //   },
-    //   revision: 1,
-    // });
-    // for (let pendingOp of this.pendingChangesQueue) {
-    //   console.log(pendingOp.operation);
-    // }
-    // this.transformPendingChangesAgainstIncomingChange({
-    //   docId: 'id',
-    //   revision: 1,
-    //   ackTo: 'toske',
-    //   operation: {
-    //     operand: 'andrija',
-    //     position: 0,
-    //     type: 'insert',
-    //     length: 7,
-    //   },
-    // });
-    // console.log('---');
-    // for (let pendingOp of this.pendingChangesQueue) {
-    //   console.log(pendingOp.operation);
-    // }
-  }
+  constructor() {}
 
   transformPendingChangesAgainstIncomingOperation(incoming: OperationWrapper) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
       const arr: OperationWrapper[] = [];
 
       for (const pendingOpWrapper of pendingOpWrappers) {
-        const transformedOps = this.transform(
+        const transformedOps = transformOperation(
           pendingOpWrapper.operation,
           incoming.operation
         );
@@ -141,229 +93,86 @@ export class DocumentComponent implements AfterViewInit {
     }
   }
 
-  transform(op1: Operation, op2: Operation): Operation[] {
-    if (op1.type === 'insert' && op2.type === 'insert') {
-      return [this.transformII(op1, op2)];
-    } else if (op1.type === 'insert' && op2.type === 'delete') {
-      return [this.transformID(op1, op2)];
-    } else if (op1.type === 'delete' && op2.type === 'insert') {
-      return this.transformDI(op1, op2);
-    } else if (op1.type === 'delete' && op2.type === 'delete') {
-      return [this.transformDD(op1, op2)];
-    } else {
-      throw new Error('Transform failed');
-    }
-  }
-
-  transformII(op1: Operation, op2: Operation): Operation {
-    const newPos =
-      op1.position < op2.position ? op1.position : op1.position + op2.length;
-    return {
-      type: op1.type,
-      operand: op1.operand,
-      position: newPos,
-      length: op1.length,
-    };
-  }
-
-  transformID(op1: Operation, op2: Operation): Operation {
-    const op2End = op2.position + op2.length - 1;
-    if (op1.position <= op2.position) {
-      return {
-        type: op1.type,
-        operand: op1.operand,
-        position: op1.position,
-        length: op1.length,
-      };
-    } else if (op1.position <= op2End) {
-      return {
-        type: op1.type,
-        operand: op1.operand,
-        position: op2.position,
-        length: op1.length,
-      };
-    } else {
-      return {
-        type: op1.type,
-        operand: op1.operand,
-        position: op1.position - op2.length,
-        length: op1.length,
-      };
-    }
-  }
-
-  transformDI(op1: Operation, op2: Operation): Operation[] {
-    const op1End = op1.position + op1.length - 1;
-    if (op1.position < op2.position) {
-      if (op1End < op2.position) {
-        return [
-          {
-            type: op1.type,
-            operand: op1.operand,
-            position: op1.position,
-            length: op1.length,
-          },
-        ];
-      } else {
-        const leftLength = op2.position - op1.position;
-        const rightLength = op1.length - op2.position + op1.position;
-        const left = op1.operand?.substring(0, leftLength);
-        const right = op1.operand?.substring(leftLength);
-
-        return [
-          {
-            type: op1.type,
-            operand: left ?? null,
-            position: op1.position,
-            length: op2.position - op1.position,
-          },
-          {
-            type: op1.type,
-            operand: right ?? null,
-            position: op1.position + leftLength + op2.length,
-            length: rightLength,
-          },
-        ];
-      }
-    } else {
-      return [
-        {
-          type: op1.type,
-          operand: op1.operand,
-          position: op1.position + op2.length,
-          length: op1.length,
-        },
-      ];
-    }
-  }
-
-  transformDD(op1: Operation, op2: Operation): Operation {
-    const op1End = op1.position + op1.length - 1;
-    const op2End = op2.position + op2.length - 1;
-
-    if (op1End < op2.position) {
-      return {
-        type: op1.type,
-        operand: op1.operand,
-        position: op1.position,
-        length: op1.length,
-      };
-    } else if (op1.position > op2End) {
-      return {
-        type: op1.type,
-        operand: op1.operand,
-        position: op1.position - op2.length,
-        length: op1.length,
-      };
-    } else if (op1.position < op2.position) {
-      const operand = op1.operand?.substring(0, op2.position - op1.position);
-      return {
-        type: op1.type,
-        operand: operand ?? null,
-        position: op1.position,
-        length: op2.position - op1.position,
-      };
-    } else if (op1End > op2End) {
-      const diff = op1.position + op1.length - (op2.position + op2.length);
-      const operand = op1.operand?.substring(op1.length - diff);
-      return {
-        type: op1.type,
-        operand: operand ?? null,
-        position: op2.position,
-        length: diff,
-      };
-    } else {
-      return op1;
-    }
-  }
-
   ngAfterViewInit(): void {
-    this.route.paramMap.subscribe((params) => {
-      const id = params.get('id')!;
+    const id = this.route.snapshot.params['id'];
 
-      this.http
-        .get<Document>(`http://localhost:8080/doc/${id}`)
-        .subscribe((doc) => {
-          this.doc.set(doc);
+    this.http
+      .get<Document>(`http://localhost:8080/doc/${id}`)
+      .subscribe((doc) => {
+        this.socket.connect(id);
 
-          console.log(doc);
+        this.setupCodeMirror(doc);
 
-          this.socket = io(`ws://localhost:8079?docId=${doc.id}`);
+        this.doc.set(doc);
+        console.log(doc);
 
-          this.socket.on('disconnect', () => {
-            console.log('Socket.IO disconnected');
-          });
+        this.socket.operation$.subscribe((incomingOp) => {
+          console.log('socket operation response:', incomingOp);
 
-          this.socket.on('connect', () => {
-            console.log('Socket.IO connected:', this.socket.id);
-          });
+          this.transformPendingChangesAgainstIncomingOperation(incomingOp);
 
-          this.socket.on('operation', (incomingOpStr: string) => {
-            const incomingOp: OperationWrapper = JSON.parse(incomingOpStr);
+          this.doc.update((doc) => ({
+            ...doc,
+            revision: incomingOp.revision,
+          }));
 
-            console.log('socket operation response:', incomingOp);
-
-            this.transformPendingChangesAgainstIncomingOperation(incomingOp);
-
-            this.doc.update((doc) => ({
-              ...doc,
-              revision: incomingOp.revision,
-            }));
-
-            if (incomingOp.operation.type === 'insert') {
-              this.view.dispatch({
-                changes: {
-                  from: incomingOp.operation.position,
-                  insert: incomingOp.operation.operand!,
-                },
-              });
-            } else {
-              this.view.dispatch({
-                changes: {
-                  from: incomingOp.operation.position,
-                  to:
-                    incomingOp.operation.position + incomingOp.operation.length,
-                },
-              });
-            }
-          });
-
-          this.listenChangesExtension = StateField.define({
-            create: () => 0,
-            update: (value, transaction) =>
-              this.listenChangesUpdate(value, transaction),
-          });
-
-          try {
-            this.state = EditorState.create({
-              doc: doc.content,
-              extensions: [
-                basicSetup,
-                javascript(),
-                lineNumbers(),
-                this.listenChangesExtension,
-              ],
-            });
-          } catch (e) {
-            console.error(e);
-          }
-          this.view = new EditorView({
-            state: this.state,
-            parent: this.cm.nativeElement,
-          });
+          this.applyOperation(incomingOp);
         });
+      });
+  }
+
+  applyOperation(incomingOp: OperationWrapper) {
+    if (incomingOp.operation.type === 'insert') {
+      this.view.dispatch({
+        changes: {
+          from: incomingOp.operation.position,
+          insert: incomingOp.operation.operand!,
+        },
+      });
+    } else {
+      this.view.dispatch({
+        changes: {
+          from: incomingOp.operation.position,
+          to: incomingOp.operation.position + incomingOp.operation.length,
+        },
+      });
+    }
+
+    this.pointers.set(incomingOp.performedBy, incomingOp.operation.position);
+  }
+
+  setupCodeMirror(doc: Document) {
+    this.listenChangesExtension = StateField.define({
+      create: () => 0,
+      update: (value, transaction) =>
+        this.listenChangesUpdate(value, transaction),
+    });
+
+    this.state = EditorState.create({
+      doc: doc.content,
+      extensions: [
+        basicSetup,
+        javascript({ typescript: true }),
+        lineNumbers(),
+        this.listenChangesExtension,
+      ],
+    });
+
+    this.view = new EditorView({
+      state: this.state,
+      parent: this.cm.nativeElement,
     });
   }
 
   ackHandler() {
-    return (ackData: OperationAck) => {
-      console.log('Acknowledgment from server:', ackData);
+    return (ackRevision: OperationAck) => {
+      console.log('Acknowledgment from server:', ackRevision);
 
-      this.doc.update((doc) => ({ ...doc, revision: ackData.revision }));
+      this.doc.update((doc) => ({ ...doc, revision: ackRevision.revision }));
 
       for (const operationWrappers of this.pendingChangesQueue) {
         operationWrappers.forEach(
-          (wrapper) => (wrapper.revision = ackData.revision)
+          (wrapper) => (wrapper.revision = ackRevision.revision)
         );
       }
 
@@ -374,13 +183,28 @@ export class DocumentComponent implements AfterViewInit {
 
       this.pendingChangesQueue
         .dequeue()
-        .map((op) => this.socket.emit('operation', op, this.ackHandler()));
+        .map((op) =>
+          this.socket.emitOperation(op).subscribe(this.ackHandler())
+        );
     };
   }
 
   listenChangesUpdate(value: number, transaction: Transaction) {
+    const selectionRange = transaction.startState.selection.ranges[0];
+    const annotation = (transaction as any).annotations[0].value as string;
+
+    if (!transaction.docChanged && annotation === 'select.pointer') {
+      console.log(transaction);
+
+      this.socket.emitSelection({
+        docId: this.doc().id,
+        from: selectionRange.from,
+        to: selectionRange.to,
+        performedBy: 'toske',
+      });
+    }
+
     if (transaction.docChanged) {
-      const annotation = (transaction as any).annotations[0].value as string;
       if (typeof annotation !== 'string') {
         return value;
       }
@@ -394,7 +218,6 @@ export class DocumentComponent implements AfterViewInit {
       const lengthDiff =
         transaction.changes.desc.newLength - transaction.changes.desc.length;
 
-      const selectionRange = transaction.startState.selection.ranges[0];
       console.log({
         transaction,
         changes: transaction.changes,
@@ -419,7 +242,7 @@ export class DocumentComponent implements AfterViewInit {
         const opDelete: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          ackTo: 'toske',
+          performedBy: 'toske',
           operation: {
             type: 'delete',
             operand: null,
@@ -431,7 +254,7 @@ export class DocumentComponent implements AfterViewInit {
         const opInsert: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          ackTo: 'toske',
+          performedBy: 'toske',
           operation: {
             type: 'insert',
             operand: text!,
@@ -442,21 +265,22 @@ export class DocumentComponent implements AfterViewInit {
 
         console.log({ opDelete, opInsert });
 
-        this.pendingChangesQueue.enqueue([opDelete]);
-        this.pendingChangesQueue.enqueue([opInsert]);
+        this.pendingChangesQueue.enqueue([opDelete, opInsert]);
 
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue
             .dequeue()
-            .map((op) => this.socket.emit('operation', op, this.ackHandler()));
+            .map((op) =>
+              this.socket.emitOperation(op).subscribe(this.ackHandler())
+            );
         }
       } else {
         const operation: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          ackTo: 'toske',
+          performedBy: 'toske',
           operation: {
             type: type,
             operand: text ?? null,
@@ -477,7 +301,9 @@ export class DocumentComponent implements AfterViewInit {
 
           this.pendingChangesQueue
             .dequeue()
-            .map((op) => this.socket.emit('operation', op, this.ackHandler()));
+            .map((op) =>
+              this.socket.emitOperation(op).subscribe(this.ackHandler())
+            );
         }
       }
     }

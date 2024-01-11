@@ -116,20 +116,22 @@ export class DocumentComponent implements AfterViewInit {
     // }
   }
 
-  transformPendingChangesAgainstIncomingChange(incoming: OperationWrapper) {
+  transformPendingChangesAgainstIncomingOperation(incomingOp: Operation) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
       const arr: OperationWrapper[] = [];
 
       for (const pendingOpWrapper of pendingOpWrappers) {
         const transformedOps = this.transform(
           pendingOpWrapper.operation,
-          incoming.operation
+          incomingOp
         );
 
-        const transformedOpWrappers = transformedOps.map((op) => ({
-          ...pendingOpWrapper,
-          operation: op,
-        }));
+        const transformedOpWrappers: OperationWrapper[] = transformedOps.map(
+          (op) => ({
+            ...pendingOpWrapper,
+            operation: op,
+          })
+        );
 
         arr.push(...transformedOpWrappers);
       }
@@ -300,7 +302,9 @@ export class DocumentComponent implements AfterViewInit {
 
             console.log('socket operation response:', incomingOp);
 
-            this.transformPendingChangesAgainstIncomingChange(incomingOp);
+            this.transformPendingChangesAgainstIncomingOperation(
+              incomingOp.operation
+            );
 
             this.doc.update((doc) => ({
               ...doc,

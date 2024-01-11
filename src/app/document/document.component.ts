@@ -303,9 +303,7 @@ export class DocumentComponent implements AfterViewInit {
 
             console.log('socket operation response:', incomingOp);
 
-            this.transformPendingChangesAgainstIncomingOperation(
-              incomingOp.operation
-            );
+            this.transformPendingChangesAgainstIncomingOperation(incomingOp);
 
             this.doc.update((doc) => ({
               ...doc,

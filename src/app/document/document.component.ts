@@ -361,6 +361,12 @@ export class DocumentComponent implements AfterViewInit {
 
       this.doc.update((doc) => ({ ...doc, revision: ackData.revision }));
 
+      for (const operationWrappers of this.pendingChangesQueue) {
+        operationWrappers.forEach(
+          (wrapper) => (wrapper.revision = ackData.revision)
+        );
+      }
+
       if (this.pendingChangesQueue.isEmpty()) {
         this.startedSendingEvents = false;
         return;

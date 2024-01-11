@@ -117,12 +117,24 @@ export class DocumentComponent implements AfterViewInit {
   }
 
   transformPendingChangesAgainstIncomingChange(incoming: OperationWrapper) {
-    for (const pendingOps of this.pendingChangesQueue) {
-      const arr = [];
+    for (let pendingOpWrappers of this.pendingChangesQueue) {
+      const arr: OperationWrapper[] = [];
 
-      for (const op of pendingOps) {
-        arr.push(...this.transform(op.operation, incoming.operation));
+      for (const pendingOpWrapper of pendingOpWrappers) {
+        const transformedOps = this.transform(
+          pendingOpWrapper.operation,
+          incoming.operation
+        );
+
+        const transformedOpWrappers = transformedOps.map((op) => ({
+          ...pendingOpWrapper,
+          operation: op,
+        }));
+
+        arr.push(...transformedOpWrappers);
       }
+
+      pendingOpWrappers = arr;
     }
   }
 

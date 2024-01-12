@@ -1,0 +1,78 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+env:
+  APP_NAME: ng-realtime
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v3
+
+    - name: get-npm-version
+      id: package_version
+      uses: martinbeentjes/npm-get-version-action@v1.3.1
+      with:
+        path: .
+    
+    - name: cache node modules
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: install dependencies
+      run: npm i
+
+    - name: build application
+      run: npm run build
+
+    - name: Docker Metadata action
+      id: meta
+      uses: docker/metadata-action@v5.0.0
+      with:
+        images: |
+          ghcr.io/e-citaonica/${{ env.APP_NAME }}
+        tags: |
+          type=raw,value=${{ steps.package_version.outputs.current-version }}
+
+      
+    - name: login to gitHub container registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Notify .NET API webhook listener
+      run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{ "Token": "${{ secrets.WEB_HOOK_LISTENER_TKN }}", "Tags": "${{ steps.meta.outputs.tags }}" }' \
+            ${{ vars.WEB_HOOK_LISTENER_ENDPOINT }}
+      

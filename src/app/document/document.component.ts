@@ -29,6 +29,7 @@ import { CommonModule } from '@angular/common';
 import { Queue } from '../queue';
 import { transformOperation } from '../transformations';
 import { SocketIoService } from '../socket-io.service';
+import { Constants } from '../../constants';
 
 @Component({
   selector: 'app-document',
@@ -97,7 +98,7 @@ export class DocumentComponent implements AfterViewInit {
     const id = this.route.snapshot.params['id'];
 
     this.http
-      .get<Document>(`http://localhost:8080/doc/${id}`)
+      .get<Document>(`${Constants.API_URL}/doc/${id}`)
       .subscribe((doc) => {
         this.socket.connect(id);
 

@@ -3,6 +3,7 @@ import { Socket, io } from 'socket.io-client';
 import { Observable, Subject } from 'rxjs';
 import { CursorPosition, OperationAck, OperationWrapper } from './operations';
 import { SelectionRange } from '@codemirror/state';
+import { Constants } from '../constants';
 
 @Injectable({
   providedIn: 'root',
@@ -18,7 +19,7 @@ export class SocketIoService {
   constructor() {}
 
   connect(docId: string) {
-    this.socket = io(`ws://localhost:8079?docId=${docId}`);
+    this.socket = io(`${Constants.WS_URL}?docId=${docId}`);
 
     this.socket.on('connect', () => {
       console.log('Socket.IO connected:', this.socket.id);

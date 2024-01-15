@@ -16,9 +16,14 @@ export type OperationWrapper = {
 
 export type OperationAck = Pick<Document, 'revision'>;
 
-export type CursorPosition = {
+export type Selection = {
   docId: string;
   from: number;
   to: number;
   performedBy: string;
+};
+
+export type UserJoinedPayload = {
+  socketId: string;
+  username: string;
 };

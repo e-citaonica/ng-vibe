@@ -1,9 +1,14 @@
 import { Injectable, signal } from '@angular/core';
 import { Socket, io } from 'socket.io-client';
-import { Observable, Subject } from 'rxjs';
-import { CursorPosition, OperationAck, OperationWrapper } from './operations';
-import { SelectionRange } from '@codemirror/state';
+import { Observable } from 'rxjs';
+import {
+  Selection,
+  OperationAck,
+  OperationWrapper,
+  UserJoinedPayload,
+} from './models';
 import { Constants } from '../constants';
+import { SocketEvent } from './socket-events';
 
 @Injectable({
   providedIn: 'root',
@@ -15,18 +20,18 @@ export class SocketIoService {
 
   public operation$ = new Observable<OperationWrapper>();
   public selection$ = new Observable<{ from: number; to: number }>();
+  public userJoin$ = new Observable<UserJoinedPayload>();
+  public userLeave$ = new Observable<string>();
 
   constructor() {}
 
   connect(docId: string) {
-    this.socket = io(`${Constants.WS_URL}?docId=${docId}`);
+    const username = localStorage.getItem('user');
+
+    this.socket = io(`${Constants.WS_URL}?docId=${docId}&user=${username}`);
 
     this.socket.on('connect', () => {
       console.log('Socket.IO connected:', this.socket.id);
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('Socket.IO disconnected');
     });
 
     this.socket.on('operation', (incomingOpStr: string) => {
@@ -59,6 +64,21 @@ export class SocketIoService {
         });
       }
     );
+
+    this.userJoin$ = new Observable<UserJoinedPayload>((observer) => {
+      this.socket.on('user_joined_doc', (payloadStr: string) => {
+        const payload: UserJoinedPayload = JSON.parse(payloadStr);
+        observer.next(payload);
+      });
+    });
+
+    this.userLeave$ = new Observable<string>((observer) => {
+      this.socket.on('user_left_doc', (socketId: string) => {
+        console.log('Socket.IO disconnected', socketId);
+
+        observer.next(socketId);
+      });
+    });
   }
 
   emitOperation(operation: OperationWrapper) {
@@ -69,7 +89,7 @@ export class SocketIoService {
     });
   }
 
-  emitSelection(selection: CursorPosition) {
-    this.socket.emit('selection', selection);
+  emit<T>(event: SocketEvent, payload: T) {
+    this.socket.emit(event, payload);
   }
 }

@@ -1,4 +1,9 @@
-import { Operation, OperationAck, OperationWrapper } from '../operations';
+import {
+  OperationAck,
+  OperationWrapper,
+  Selection,
+  UserJoinedPayload,
+} from '../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -6,21 +11,25 @@ import {
   Component,
   ElementRef,
   ViewChild,
-  computed,
-  effect,
   inject,
   signal,
 } from '@angular/core';
 export class AppModule {}
 import { Document } from './document.model';
-import { EditorView, lineNumbers } from '@codemirror/view';
 import {
-  ChangeSpec,
-  EditorState,
-  StateField,
-  Transaction,
-  TransactionSpec,
-} from '@codemirror/state';
+  EditorView,
+  Tooltip,
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  lineNumbers,
+  rectangularSelection,
+  showTooltip,
+} from '@codemirror/view';
+import { EditorState, StateField, Transaction } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
@@ -64,10 +73,43 @@ export class DocumentComponent implements AfterViewInit {
   // sentChangesQueue = new Queue<OperationWrapper[]>();
 
   pointers = new Map<string, number>();
+  joinedUsers = new Map<string, string>();
 
   startedSendingEvents = false;
 
-  constructor() {}
+  getCursorTooltips(state: EditorState): readonly Tooltip[] {
+    return state.selection.ranges
+      .filter((range) => range.empty)
+      .map((range) => {
+        let line = state.doc.lineAt(range.head);
+        let text = line.number + ':' + (range.head - line.from);
+        return {
+          pos: range.head,
+          above: true,
+          strictSide: true,
+          arrow: true,
+          create: () => {
+            let dom = document.createElement('div');
+            dom.className = 'cm-tooltip-cursor';
+            dom.textContent = text;
+            return { dom };
+          },
+        };
+      });
+  }
+
+  constructor() {
+    const cursorTooltipField = StateField.define<readonly Tooltip[]>({
+      create: this.getCursorTooltips,
+
+      update(tooltips, tr) {
+        if (!tr.docChanged && !tr.selection) return tooltips;
+        return getCursorTooltips(tr.state);
+      },
+
+      provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
+    });
+  }
 
   transformPendingChangesAgainstIncomingOperation(incoming: OperationWrapper) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
@@ -103,9 +145,9 @@ export class DocumentComponent implements AfterViewInit {
         this.socket.connect(id);
 
         this.setupCodeMirror(doc);
+        this.socket.emit('user_joined_doc', 'toske');
 
         this.doc.set(doc);
-        console.log(doc);
 
         this.socket.operation$.subscribe((incomingOp) => {
           console.log('socket operation response:', incomingOp);
@@ -118,6 +160,19 @@ export class DocumentComponent implements AfterViewInit {
           }));
 
           this.applyOperation(incomingOp);
+        });
+
+        this.socket.userJoin$.subscribe((payload) => {
+          this.joinedUsers.set(payload.socketId, payload.username);
+          console.log(payload, 'joined');
+
+          console.log('joinedUsers:', [...this.joinedUsers.entries()]);
+        });
+
+        this.socket.userLeave$.subscribe((socketId) => {
+          this.joinedUsers.delete(socketId);
+
+          console.log('joinedUsers:', [...this.joinedUsers.entries()]);
         });
       });
   }
@@ -153,6 +208,15 @@ export class DocumentComponent implements AfterViewInit {
       doc: doc.content,
       extensions: [
         basicSetup,
+        lineNumbers(),
+        highlightActiveLineGutter(),
+        highlightSpecialChars(),
+        drawSelection(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLine(),
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
@@ -197,7 +261,7 @@ export class DocumentComponent implements AfterViewInit {
     if (!transaction.docChanged && annotation === 'select.pointer') {
       console.log(transaction);
 
-      this.socket.emitSelection({
+      this.socket.emit<Selection>('selection', {
         docId: this.doc().id,
         from: selectionRange.from,
         to: selectionRange.to,
@@ -311,4 +375,7 @@ export class DocumentComponent implements AfterViewInit {
 
     return value + 1;
   }
+}
+function getCursorTooltips(state: EditorState): readonly Tooltip[] {
+  throw new Error('Function not implemented.');
 }

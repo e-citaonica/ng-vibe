@@ -1,4 +1,4 @@
-import { Operation } from './operations';
+import { Operation } from './models';
 
 export function transformOperation(
   op1: Operation,

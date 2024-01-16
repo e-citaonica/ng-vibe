@@ -18,12 +18,13 @@ export type OperationAck = Pick<Document, 'revision'>;
 
 export type Selection = {
   docId: string;
+  revision: number;
   from: number;
   to: number;
   performedBy: string;
 };
 
-export type UserJoinedPayload = {
+export type UserInfo = {
   socketId: string;
   username: string;
 };

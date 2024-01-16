@@ -1,9 +1,4 @@
-import {
-  OperationAck,
-  OperationWrapper,
-  Selection,
-  UserJoinedPayload,
-} from '../models';
+import { OperationAck, OperationWrapper, Selection, UserInfo } from '../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -29,7 +24,12 @@ import {
   rectangularSelection,
   showTooltip,
 } from '@codemirror/view';
-import { EditorState, StateField, Transaction } from '@codemirror/state';
+import {
+  EditorState,
+  SelectionRange,
+  StateField,
+  Transaction,
+} from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
@@ -39,6 +39,12 @@ import { Queue } from '../queue';
 import { transformOperation } from '../transformations';
 import { SocketIoService } from '../socket-io.service';
 import { Constants } from '../../constants';
+import {
+  cursorTooltipBaseTheme,
+  userSelectionsDisplay,
+} from '../user-selection-widget';
+
+export const arr = [0];
 
 @Component({
   selector: 'app-document',
@@ -66,50 +72,19 @@ export class DocumentComponent implements AfterViewInit {
   state!: EditorState;
   listenChangesExtension!: StateField<number>;
 
+  presentUsers = new Map<string, string>();
+
   // All local changes which have not been sent to the server
   pendingChangesQueue = new Queue<OperationWrapper[]>();
 
   // All local changes sent to the server but have not been acknowledged
   // sentChangesQueue = new Queue<OperationWrapper[]>();
 
-  pointers = new Map<string, number>();
-  joinedUsers = new Map<string, string>();
-
   startedSendingEvents = false;
 
-  getCursorTooltips(state: EditorState): readonly Tooltip[] {
-    return state.selection.ranges
-      .filter((range) => range.empty)
-      .map((range) => {
-        let line = state.doc.lineAt(range.head);
-        let text = line.number + ':' + (range.head - line.from);
-        return {
-          pos: range.head,
-          above: true,
-          strictSide: true,
-          arrow: true,
-          create: () => {
-            let dom = document.createElement('div');
-            dom.className = 'cm-tooltip-cursor';
-            dom.textContent = text;
-            return { dom };
-          },
-        };
-      });
-  }
+  selections = new Map<string, Selection>();
 
-  constructor() {
-    const cursorTooltipField = StateField.define<readonly Tooltip[]>({
-      create: this.getCursorTooltips,
-
-      update(tooltips, tr) {
-        if (!tr.docChanged && !tr.selection) return tooltips;
-        return getCursorTooltips(tr.state);
-      },
-
-      provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
-    });
-  }
+  constructor() {}
 
   transformPendingChangesAgainstIncomingOperation(incoming: OperationWrapper) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
@@ -145,7 +120,7 @@ export class DocumentComponent implements AfterViewInit {
         this.socket.connect(id);
 
         this.setupCodeMirror(doc);
-        this.socket.emit('user_joined_doc', 'toske');
+        this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
 
         this.doc.set(doc);
 
@@ -163,22 +138,30 @@ export class DocumentComponent implements AfterViewInit {
         });
 
         this.socket.userJoin$.subscribe((payload) => {
-          this.joinedUsers.set(payload.socketId, payload.username);
+          this.presentUsers.set(payload.socketId, payload.username);
           console.log(payload, 'joined');
 
-          console.log('joinedUsers:', [...this.joinedUsers.entries()]);
+          console.log('joinedUsers:', [...this.presentUsers.entries()]);
         });
 
         this.socket.userLeave$.subscribe((socketId) => {
-          this.joinedUsers.delete(socketId);
+          this.presentUsers.delete(socketId);
 
-          console.log('joinedUsers:', [...this.joinedUsers.entries()]);
+          console.log('joinedUsers:', [...this.presentUsers.entries()]);
         });
       });
   }
 
   applyOperation(incomingOp: OperationWrapper) {
     if (incomingOp.operation.type === 'insert') {
+      this.selections.set(incomingOp.performedBy, {
+        docId: incomingOp.docId,
+        revision: incomingOp.revision,
+        performedBy: incomingOp.performedBy,
+        from: incomingOp.operation.position + incomingOp.operation.length,
+        to: incomingOp.operation.position + incomingOp.operation.length,
+      });
+
       this.view.dispatch({
         changes: {
           from: incomingOp.operation.position,
@@ -186,6 +169,14 @@ export class DocumentComponent implements AfterViewInit {
         },
       });
     } else {
+      this.selections.set(incomingOp.performedBy, {
+        docId: incomingOp.docId,
+        revision: incomingOp.revision,
+        performedBy: incomingOp.performedBy,
+        from: incomingOp.operation.position,
+        to: incomingOp.operation.position,
+      });
+
       this.view.dispatch({
         changes: {
           from: incomingOp.operation.position,
@@ -193,8 +184,6 @@ export class DocumentComponent implements AfterViewInit {
         },
       });
     }
-
-    this.pointers.set(incomingOp.performedBy, incomingOp.operation.position);
   }
 
   setupCodeMirror(doc: Document) {
@@ -202,6 +191,50 @@ export class DocumentComponent implements AfterViewInit {
       create: () => 0,
       update: (value, transaction) =>
         this.listenChangesUpdate(value, transaction),
+    });
+
+    // setInterval(() => {
+    //   arr.push(arr.length);
+    //   this.view.dispatch();
+    // }, 1000);
+
+    const getCursorTooltips = (): readonly Tooltip[] => {
+      return [...this.selections.entries()].map(([username, selection]) => {
+        return {
+          pos: selection.from,
+          above: true,
+          strictSide: true,
+          arrow: true,
+          create: () => {
+            let dom = document.createElement('div');
+            dom.className = 'cm-tooltip-cursor';
+            dom.textContent = username;
+            return { dom };
+          },
+        };
+      });
+    };
+
+    const cursorTooltipField = StateField.define<readonly Tooltip[]>({
+      create: getCursorTooltips,
+
+      update(tooltips, tr) {
+        // if (!tr.docChanged && !tr.selection) return tooltips;
+        return getCursorTooltips();
+      },
+
+      provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
+    });
+
+    this.socket.selection$.subscribe((selection) => {
+      this.selections.set(selection.performedBy, selection);
+      this.view.dispatch();
+    });
+
+    this.socket.userLeave$.subscribe((socketId) => {
+      // TODO: username or socketId?
+      this.selections.delete(socketId);
+      this.view.dispatch();
     });
 
     this.state = EditorState.create({
@@ -220,6 +253,8 @@ export class DocumentComponent implements AfterViewInit {
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
+        // userSelectionsDisplay(this.socket.selection$, this.socket.userLeave$),
+        [cursorTooltipBaseTheme, cursorTooltipField],
       ],
     });
 
@@ -255,17 +290,25 @@ export class DocumentComponent implements AfterViewInit {
   }
 
   listenChangesUpdate(value: number, transaction: Transaction) {
-    const selectionRange = transaction.startState.selection.ranges[0];
+    const selectionRange = transaction.startState.selection.main;
     const annotation = (transaction as any).annotations[0].value as string;
 
-    if (!transaction.docChanged && annotation === 'select.pointer') {
+    if (
+      !transaction.docChanged &&
+      typeof annotation === 'string' &&
+      annotation.startsWith('select')
+    ) {
       console.log(transaction);
+      const range = transaction.selection!.main;
+
+      console.log(range);
 
       this.socket.emit<Selection>('selection', {
         docId: this.doc().id,
-        from: selectionRange.from,
-        to: selectionRange.to,
-        performedBy: 'toske',
+        revision: this.doc().revision,
+        performedBy: localStorage.getItem('user')!,
+        from: range.from,
+        to: range.to,
       });
     }
 
@@ -307,7 +350,7 @@ export class DocumentComponent implements AfterViewInit {
         const opDelete: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          performedBy: 'toske',
+          performedBy: localStorage.getItem('user')!,
           operation: {
             type: 'delete',
             operand: null,
@@ -319,7 +362,7 @@ export class DocumentComponent implements AfterViewInit {
         const opInsert: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          performedBy: 'toske',
+          performedBy: localStorage.getItem('user')!,
           operation: {
             type: 'insert',
             operand: text!,
@@ -345,7 +388,7 @@ export class DocumentComponent implements AfterViewInit {
         const operation: OperationWrapper = {
           docId: this.doc().id,
           revision: this.doc().revision,
-          performedBy: 'toske',
+          performedBy: localStorage.getItem('user')!,
           operation: {
             type: type,
             operand: text ?? null,
@@ -375,7 +418,4 @@ export class DocumentComponent implements AfterViewInit {
 
     return value + 1;
   }
-}
-function getCursorTooltips(state: EditorState): readonly Tooltip[] {
-  throw new Error('Function not implemented.');
 }

@@ -1,12 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Socket, io } from 'socket.io-client';
 import { Observable } from 'rxjs';
-import {
-  Selection,
-  OperationAck,
-  OperationWrapper,
-  UserJoinedPayload,
-} from './models';
+import { Selection, OperationAck, OperationWrapper, UserInfo } from './models';
 import { Constants } from '../constants';
 import { SocketEvent } from './socket-events';
 
@@ -19,8 +14,8 @@ export class SocketIoService {
   public operation = signal<OperationWrapper | null>(null);
 
   public operation$ = new Observable<OperationWrapper>();
-  public selection$ = new Observable<{ from: number; to: number }>();
-  public userJoin$ = new Observable<UserJoinedPayload>();
+  public selection$ = new Observable<Selection>();
+  public userJoin$ = new Observable<UserInfo>();
   public userLeave$ = new Observable<string>();
 
   constructor() {}
@@ -52,22 +47,19 @@ export class SocketIoService {
       });
     });
 
-    this.selection$ = new Observable<{ from: number; to: number }>(
-      (observer) => {
-        this.socket.on('selection', (selection: string) => {
-          const incomingSelection: { from: number; to: number } =
-            JSON.parse(selection);
+    this.selection$ = new Observable<Selection>((observer) => {
+      this.socket.on('selection', (selection: string) => {
+        const incomingSelection: Selection = JSON.parse(selection);
 
-          console.log('Socket selection response:', incomingSelection);
+        console.log('Socket selection response:', incomingSelection);
 
-          observer.next(incomingSelection);
-        });
-      }
-    );
+        observer.next(incomingSelection);
+      });
+    });
 
-    this.userJoin$ = new Observable<UserJoinedPayload>((observer) => {
+    this.userJoin$ = new Observable<UserInfo>((observer) => {
       this.socket.on('user_joined_doc', (payloadStr: string) => {
-        const payload: UserJoinedPayload = JSON.parse(payloadStr);
+        const payload: UserInfo = JSON.parse(payloadStr);
         observer.next(payload);
       });
     });

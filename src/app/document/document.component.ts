@@ -1,4 +1,4 @@
-import { OperationAck, OperationWrapper, Selection, UserInfo } from '../models';
+import { OperationAck, OperationWrapper, Selection } from '../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -24,12 +24,7 @@ import {
   rectangularSelection,
   showTooltip,
 } from '@codemirror/view';
-import {
-  EditorState,
-  SelectionRange,
-  StateField,
-  Transaction,
-} from '@codemirror/state';
+import { EditorState, StateField, Transaction } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
@@ -41,7 +36,7 @@ import { SocketIoService } from '../socket-io.service';
 import { Constants } from '../../constants';
 import {
   cursorTooltipBaseTheme,
-  userSelectionsDisplay,
+  json1PresenceDisplay,
 } from '../user-selection-widget';
 
 export const arr = [0];
@@ -201,7 +196,7 @@ export class DocumentComponent implements AfterViewInit {
     const getCursorTooltips = (): readonly Tooltip[] => {
       return [...this.selections.entries()].map(([username, selection]) => {
         return {
-          pos: selection.from,
+          pos: selection.to,
           above: true,
           strictSide: true,
           arrow: true,
@@ -228,12 +223,14 @@ export class DocumentComponent implements AfterViewInit {
 
     this.socket.selection$.subscribe((selection) => {
       this.selections.set(selection.performedBy, selection);
+      // TODO: something smarter than manual update trigger
       this.view.dispatch();
     });
 
     this.socket.userLeave$.subscribe((socketId) => {
       // TODO: username or socketId?
       this.selections.delete(socketId);
+      // TODO: something smarter than manual update trigger
       this.view.dispatch();
     });
 
@@ -253,7 +250,7 @@ export class DocumentComponent implements AfterViewInit {
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
-        // userSelectionsDisplay(this.socket.selection$, this.socket.userLeave$),
+        json1PresenceDisplay(this.socket.selection$, this.socket.userLeave$),
         [cursorTooltipBaseTheme, cursorTooltipField],
       ],
     });

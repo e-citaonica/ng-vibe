@@ -2,82 +2,157 @@ import {
   Decoration,
   DecorationSet,
   EditorView,
-  Tooltip,
   ViewPlugin,
   WidgetType,
-  showTooltip,
 } from '@codemirror/view';
-import { Selection } from './models';
-import {
-  Annotation,
-  EditorState,
-  RangeSet,
-  StateEffect,
-  StateField,
-} from '@codemirror/state';
+import { Annotation, RangeSet, StateEffect } from '@codemirror/state';
 import { Observable } from 'rxjs';
-import { arr } from './document/document.component';
+import { Selection } from './models';
 
-const addUnderline = StateEffect.define<{ from: number; to: number }>({
-  map: ({ from, to }, change) => ({
-    from: change.mapPos(from),
-    to: change.mapPos(to),
-  }),
-});
+const addHighlight = StateEffect.define<{ from: number; to: number }>({});
+const removeHighlight = StateEffect.define<{ from: number; to: number }>({});
 
-const underlineField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(underlines, tr) {
-    underlines = underlines.map(tr.changes);
-    for (let e of tr.effects)
-      if (e.is(addUnderline)) {
-        underlines = underlines.update({
-          add: [underlineMark.range(e.value.from, e.value.to)],
-        });
-      }
-    return underlines;
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
+function h(str: string): number {
+  return [...str].reduce((acc, char) => {
+    return char.charCodeAt(0) + ((acc << 5) - acc);
+  }, 0);
+}
 
-const underlineMark = Decoration.mark({ class: 'cm-underline' });
+function backgroundColorHash(str: string) {
+  const stringUniqueHash = h(str);
 
-const underlineTheme = EditorView.baseTheme({
-  '.cm-underline': { textDecoration: 'underline 3px red' },
-});
+  const color = `hsl(${Math.abs(stringUniqueHash % 360)}, 85%, 85%)`;
 
-export function underlineSelection(view: EditorView) {
-  let effects: StateEffect<unknown>[] = view.state.selection.ranges
-    .filter((r) => !r.empty)
-    .map(({ from, to }) => addUnderline.of({ from, to }));
-  if (!effects.length) return false;
+  console.log(color);
 
-  if (!view.state.field(underlineField, false))
-    effects.push(StateEffect.appendConfig.of([underlineField, underlineTheme]));
+  return color;
+}
+
+const highlight = (username: string) =>
+  Decoration.mark({
+    attributes: { style: `background-color: ${backgroundColorHash(username)}` },
+  });
+
+// const highlightedRanges = StateField.define({
+//   create() {
+//     return Decoration.none;
+//   },
+//   update(ranges, tr) {
+//     ranges = ranges.map(tr.changes);
+//     for (let e of tr.effects) {
+//       if (e.is(addHighlight)) ranges = addRange(ranges, e.value);
+//       else if (e.is(removeHighlight)) ranges = cutRange(ranges, e.value);
+//     }
+//     return ranges;
+//   },
+//   provide: (field) => EditorView.decorations.from(field),
+// });
+
+// function cutRange(ranges: DecorationSet, r: { from: number; to: number }) {
+//   let leftover: Range<Decoration>[] = [];
+//   ranges.between(r.from, r.to, (from, to, deco) => {
+//     if (from < r.from) leftover.push(deco.range(from, r.from));
+//     if (to > r.to) leftover.push(deco.range(r.to, to));
+//   });
+//   return ranges.update({
+//     filterFrom: r.from,
+//     filterTo: r.to,
+//     filter: () => false,
+//     add: leftover,
+//   });
+// }
+
+// function addRange(ranges: DecorationSet, r: { from: number; to: number }) {
+//   ranges.between(r.from, r.to, (from, to) => {
+//     if (from < r.from) r = { from, to: r.to };
+//     if (to > r.to) r = { from: r.from, to };
+//   });
+//   return ranges.update({
+//     filterFrom: r.from,
+//     filterTo: r.to,
+//     filter: () => false,
+//     add: [highlight.range(r.from, r.to)],
+//   });
+// }
+
+// const invertHighlight = invertedEffects.of((tr) => {
+//   let found = [];
+//   for (let e of tr.effects) {
+//     if (e.is(addHighlight)) found.push(removeHighlight.of(e.value));
+//     else if (e.is(removeHighlight)) found.push(addHighlight.of(e.value));
+//   }
+//   let ranges = tr.startState.field(highlightedRanges);
+//   tr.changes.iterChangedRanges((chFrom, chTo) => {
+//     ranges.between(chFrom, chTo, (rFrom, rTo) => {
+//       if (rFrom >= chFrom || rTo <= chTo) {
+//         let from = Math.max(chFrom, rFrom),
+//           to = Math.min(chTo, rTo);
+//         if (from < to) found.push(addHighlight.of({ from, to }));
+//       }
+//     });
+//   });
+//   return found;
+// });
+
+function highlightSelections(view: EditorView, selections: Selection[]) {
+  view.dispatch({
+    effects: selections
+      .filter((s) => s.from < s.to)
+      .map((s) => addHighlight.of(s)),
+  });
+  return true;
+}
+
+function unhighlightSelections(view: EditorView, selections: Selection[]) {
+  let effects: StateEffect<{ from: number; to: number }>[] = [];
+  selections.forEach((selection) => {
+    effects.push(
+      removeHighlight.of({ from: selection.from, to: selection.to })
+    );
+  });
+
+  // let highlighted = view.state.field(highlightedRanges);
+  // for (let sel of view.state.selection.ranges) {
+  //   highlighted.between(sel.from, sel.to, (rFrom, rTo) => {
+  //     let from = Math.max(sel.from, rFrom),
+  //       to = Math.min(sel.to, rTo);
+  //     if (from < to) effects.push(removeHighlight.of({ from, to }));
+  //   });
+  // }
+
   view.dispatch({ effects });
   return true;
 }
 
-export const userSelectionsDisplay = (
+export const json1PresenceDisplay = (
   selection$: Observable<Selection>,
   userLeave$: Observable<string>
 ) => [
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
-      selections = new Map<string, Selection>();
 
       constructor(view: EditorView) {
         // Initialize decorations to empty array so CodeMirror doesn't crash.
         this.decorations = RangeSet.of([]);
 
-        selection$.subscribe((selection) => {
-          this.selections.set(selection.performedBy, selection);
+        // Mutable state local to this closure representing aggregated presence.
+        //  * Keys are presence ids
+        //  * Values are presence objects as defined by ot-json1-presence
+        const selections = new Map<string, Selection>();
 
-          this.decorations = Decoration.set(
-            [...this.selections.entries()].map(([username, selection]) => {
+        // Receive remote presence changes.
+        selection$.subscribe((selection) => {
+          // unhighlightSelections(view, [...selections.values()]);
+
+          selections.set(selection.performedBy, selection);
+
+          // Update decorations to reflect new presence state.
+          // TODO consider mutating this rather than recomputing it on each change.
+
+          const cursorDecorationsArr = [...selections.values()]
+            .filter((selection) => selection.from === selection.to)
+            .map((selection) => {
               return {
                 from: selection.from,
                 to: selection.to,
@@ -87,13 +162,24 @@ export const userSelectionsDisplay = (
                   widget: new UserSelectionWidget(selection.performedBy),
                 }),
               };
-            })
+            });
+
+          const decorations2 = [...selections.values()].map((selection) => {
+            return {
+              from: selection.from,
+              to: selection.to,
+              value: highlight(selection.performedBy),
+            };
+          });
+
+          this.decorations = Decoration.set(
+            [...cursorDecorationsArr, ...decorations2],
+            // Without this argument, we get the following error:
+            // Uncaught Error: Ranges must be added sorted by `from` position and `startSide`
+            true
           );
 
-          userLeave$.subscribe((socketId) => {
-            // TODO: username or socketId?
-            this.selections.delete(socketId);
-          });
+          // highlightSelections(view, [...selections.values()]);
 
           // Somehow this triggers re-rendering of the Decorations.
           // Not sure if this is the correct usage of the API.
@@ -101,9 +187,11 @@ export const userSelectionsDisplay = (
           // Set timeout so that the current CodeMirror update finishes
           // before the next ones that render presence begin.
           setTimeout(() => {
-            view.dispatch({ annotations: [userSelectionAnnotation.of(true)] });
+            view.dispatch({ annotations: [presenceAnnotation.of(true)] });
           }, 0);
         });
+
+        userLeave$.subscribe((socketId) => selections.delete(socketId));
       }
     },
     {
@@ -113,7 +201,7 @@ export const userSelectionsDisplay = (
   userPresenceTheme,
 ];
 
-const userSelectionAnnotation = Annotation.define();
+const presenceAnnotation = Annotation.define();
 
 class UserSelectionWidget extends WidgetType {
   constructor(readonly username: string) {
@@ -127,10 +215,10 @@ class UserSelectionWidget extends WidgetType {
   toDOM() {
     const span = document.createElement('span');
     span.setAttribute('aria-hidden', 'true');
-    span.className = 'cm-tooltip-cursor';
-    span.textContent = this.username;
+    span.className = 'cm-json1-presence';
+    // span.textContent = this.username;
 
-    // span.appendChild(document.createElement('div'));
+    span.appendChild(document.createElement('div'));
     return span;
   }
 
@@ -139,16 +227,6 @@ class UserSelectionWidget extends WidgetType {
   }
 }
 
-const userPresenceTheme = EditorView.baseTheme({
-  'cm-tooltip-cursor': {
-    backgroundColor: '#66b',
-    color: 'white',
-    border: 'none',
-    padding: '2px 7px',
-    borderRadius: '4px',
-  },
-});
-
 export const cursorTooltipBaseTheme = EditorView.baseTheme({
   '.cm-tooltip.cm-tooltip-cursor': {
     backgroundColor: '#66b',
@@ -156,11 +234,27 @@ export const cursorTooltipBaseTheme = EditorView.baseTheme({
     border: 'none',
     padding: '2px 7px',
     borderRadius: '4px',
+    'margin-right': '5px',
     '& .cm-tooltip-arrow:before': {
       borderTopColor: '#66b',
     },
     '& .cm-tooltip-arrow:after': {
       borderTopColor: 'transparent',
     },
+  },
+});
+
+const userPresenceTheme = EditorView.baseTheme({
+  '.cm-json1-presence': {
+    position: 'relative',
+  },
+  '.cm-json1-presence > div': {
+    position: 'absolute',
+    top: '0',
+    bottom: '0',
+    left: '0',
+    right: '0',
+    borderLeft: '3px solid #66b',
+    //borderRight: '1px solid black',
   },
 });

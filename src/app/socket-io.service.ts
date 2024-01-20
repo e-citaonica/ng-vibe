@@ -18,6 +18,7 @@ export class SocketIoService {
 
   public operation = signal<OperationWrapper | null>(null);
 
+  public connect$ = new Observable<string>();
   public operation$ = new Observable<OperationWrapper>();
   public selection$ = new Observable<TextSelection>();
   public userJoin$ = new Observable<UserInfo>();
@@ -30,8 +31,11 @@ export class SocketIoService {
 
     this.socket = io(`${Constants.WS_URL}?docId=${docId}&user=${username}`);
 
-    this.socket.on('connect', () => {
-      console.log('Socket.IO connected:', this.socket.id);
+    this.connect$ = new Observable<string>((observer) => {
+      this.socket.on('connect', () => {
+        console.log('Socket.IO connected:', this.socket.id);
+        observer.next(this.socket.id);
+      });
     });
 
     this.socket.on('operation', (incomingOpStr: string) => {

@@ -131,56 +131,57 @@ export class DocumentComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     const id = this.route.snapshot.params['id'];
+    this.socket.connect(id);
 
-    this.http
-      .get<Document>(`${Constants.API_URL}/doc/${id}`)
-      .subscribe((doc) => {
-        this.socket.connect(id);
+    this.socket.connect$.subscribe((socketId) => {
+      this.http
+        .get<Document>(`${Constants.API_URL}/doc/${id}`)
+        .subscribe((doc) => {
+          this.setupCodeMirror(doc);
+          this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
 
-        this.setupCodeMirror(doc);
-        this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
+          this.doc.set(doc);
 
-        this.doc.set(doc);
+          this.socket.operation$.subscribe((incomingOp) => {
+            console.log('socket operation response:', incomingOp);
 
-        this.socket.operation$.subscribe((incomingOp) => {
-          console.log('socket operation response:', incomingOp);
+            this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
+            this.transformSelectionsAgainstIncomingOperation(incomingOp);
 
-          this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
-          this.transformSelectionsAgainstIncomingOperation(incomingOp);
+            this.doc.update((doc) => ({
+              ...doc,
+              revision: incomingOp.revision,
+            }));
 
-          this.doc.update((doc) => ({
-            ...doc,
-            revision: incomingOp.revision,
-          }));
+            this.applyOperation(incomingOp);
+          });
 
-          this.applyOperation(incomingOp);
-        });
+          this.socket.selection$.subscribe((selection) => {
+            this.selections.update(
+              (selections) =>
+                new Map(selections.set(selection.performedBy, selection))
+            );
+          });
 
-        this.socket.selection$.subscribe((selection) => {
-          this.selections.update(
-            (selections) =>
-              new Map(selections.set(selection.performedBy, selection))
-          );
-        });
+          this.socket.userJoin$.subscribe((payload) => {
+            this.presentUsers.set(payload.socketId, payload.username);
+            console.log(payload.username, 'joined');
 
-        this.socket.userJoin$.subscribe((payload) => {
-          this.presentUsers.set(payload.socketId, payload.username);
-          console.log(payload.username, 'joined');
+            console.log('Present users:', [...this.presentUsers.entries()]);
+          });
 
-          console.log('Present users:', [...this.presentUsers.entries()]);
-        });
+          this.socket.userLeave$.subscribe((socketId) => {
+            this.presentUsers.delete(socketId);
 
-        this.socket.userLeave$.subscribe((socketId) => {
-          this.presentUsers.delete(socketId);
+            console.log('Present users:', [...this.presentUsers.entries()]);
 
-          console.log('Present users:', [...this.presentUsers.entries()]);
-
-          this.selections.update((selections) => {
-            selections.delete(socketId);
-            return new Map(selections);
+            this.selections.update((selections) => {
+              selections.delete(socketId);
+              return new Map(selections);
+            });
           });
         });
-      });
+    });
   }
 
   applyOperation(incomingOp: OperationWrapper) {
@@ -342,7 +343,7 @@ export class DocumentComponent implements AfterViewInit {
 
       this.pendingChangesQueue.dequeue().map((op) => {
         this.socket.emitOperation(op).subscribe(this.ackHandler());
-        this.transformSelectionsAgainstIncomingOperation(op);
+        // this.transformSelectionsAgainstIncomingOperation(op);
       });
     };
   }
@@ -429,13 +430,15 @@ export class DocumentComponent implements AfterViewInit {
         console.log({ opDelete, opInsert });
 
         this.pendingChangesQueue.enqueue([opDelete, opInsert]);
+        this.transformSelectionsAgainstIncomingOperation(opDelete);
+        this.transformSelectionsAgainstIncomingOperation(opInsert);
 
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue.dequeue().map((op) => {
             this.socket.emitOperation(op).subscribe(this.ackHandler());
-            this.transformSelectionsAgainstIncomingOperation(op);
+            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       } else {
@@ -456,6 +459,7 @@ export class DocumentComponent implements AfterViewInit {
         };
 
         this.pendingChangesQueue.enqueue([operation]);
+        this.transformSelectionsAgainstIncomingOperation(operation);
 
         console.log({ operation });
 
@@ -464,7 +468,7 @@ export class DocumentComponent implements AfterViewInit {
 
           this.pendingChangesQueue.dequeue().map((op) => {
             this.socket.emitOperation(op).subscribe(this.ackHandler());
-            this.transformSelectionsAgainstIncomingOperation(op);
+            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       }

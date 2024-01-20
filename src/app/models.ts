@@ -1,6 +1,6 @@
 import { Document } from './document/document.model';
 
-export type Operation = {
+export type TextOperation = {
   type: 'insert' | 'delete';
   operand: string | null;
   position: number;
@@ -11,12 +11,12 @@ export type OperationWrapper = {
   docId: string;
   revision: number;
   performedBy: string;
-  operation: Operation;
+  operation: TextOperation;
 };
 
 export type OperationAck = Pick<Document, 'revision'>;
 
-export type Selection = {
+export type TextSelection = {
   docId: string;
   revision: number;
   from: number;

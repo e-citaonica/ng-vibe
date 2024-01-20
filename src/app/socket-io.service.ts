@@ -1,7 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import { Socket, io } from 'socket.io-client';
 import { Observable } from 'rxjs';
-import { Selection, OperationAck, OperationWrapper, UserInfo } from './models';
+import {
+  TextSelection,
+  OperationAck,
+  OperationWrapper,
+  UserInfo,
+} from './models';
 import { Constants } from '../constants';
 import { SocketEvent } from './socket-events';
 
@@ -14,7 +19,7 @@ export class SocketIoService {
   public operation = signal<OperationWrapper | null>(null);
 
   public operation$ = new Observable<OperationWrapper>();
-  public selection$ = new Observable<Selection>();
+  public selection$ = new Observable<TextSelection>();
   public userJoin$ = new Observable<UserInfo>();
   public userLeave$ = new Observable<string>();
 
@@ -47,9 +52,9 @@ export class SocketIoService {
       });
     });
 
-    this.selection$ = new Observable<Selection>((observer) => {
+    this.selection$ = new Observable<TextSelection>((observer) => {
       this.socket.on('selection', (selection: string) => {
-        const incomingSelection: Selection = JSON.parse(selection);
+        const incomingSelection: TextSelection = JSON.parse(selection);
 
         console.log('Socket selection response:', incomingSelection);
 

@@ -1,10 +1,11 @@
-import { OperationAck, OperationWrapper, Selection } from '../models';
+import { OperationAck, OperationWrapper, TextSelection } from '../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Injector,
   ViewChild,
   inject,
   signal,
@@ -31,13 +32,15 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Queue } from '../queue';
-import { transformOperation } from '../transformations';
+import { transformOperation } from '../operation-transformations';
 import { SocketIoService } from '../socket-io.service';
 import { Constants } from '../../constants';
 import {
+  hashStringToColor,
   cursorTooltipBaseTheme,
-  json1PresenceDisplay,
+  userPresenceExtension,
 } from '../user-selection-widget';
+import { transformSelection } from '../selection-transformations';
 
 export const arr = [0];
 
@@ -72,16 +75,18 @@ export class DocumentComponent implements AfterViewInit {
   // All local changes which have not been sent to the server
   pendingChangesQueue = new Queue<OperationWrapper[]>();
 
-  // All local changes sent to the server but have not been acknowledged
-  // sentChangesQueue = new Queue<OperationWrapper[]>();
-
   startedSendingEvents = false;
 
-  selections = new Map<string, Selection>();
+  selections = signal(new Map<string, TextSelection>());
+  injector: Injector;
 
-  constructor() {}
+  constructor() {
+    this.injector = inject(Injector);
+  }
 
-  transformPendingChangesAgainstIncomingOperation(incoming: OperationWrapper) {
+  transformPendingOperationsAgainstIncomingOperation(
+    incoming: OperationWrapper
+  ) {
     for (let pendingOpWrappers of this.pendingChangesQueue) {
       const arr: OperationWrapper[] = [];
 
@@ -106,6 +111,24 @@ export class DocumentComponent implements AfterViewInit {
     }
   }
 
+  transformSelectionsAgainstIncomingOperation(incoming: OperationWrapper) {
+    for (const [username, selection] of this.selections().entries()) {
+      const before = selection;
+      const transformedSelection = transformSelection(
+        selection,
+        incoming.operation
+      );
+      this.selections.update(
+        (selections) => new Map(selections.set(username, transformedSelection))
+      );
+      const after = transformedSelection;
+      console.log({ before, after });
+    }
+
+    // TODO: Unoptimal to manually update
+    this.view.dispatch();
+  }
+
   ngAfterViewInit(): void {
     const id = this.route.snapshot.params['id'];
 
@@ -122,7 +145,8 @@ export class DocumentComponent implements AfterViewInit {
         this.socket.operation$.subscribe((incomingOp) => {
           console.log('socket operation response:', incomingOp);
 
-          this.transformPendingChangesAgainstIncomingOperation(incomingOp);
+          this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
+          this.transformSelectionsAgainstIncomingOperation(incomingOp);
 
           this.doc.update((doc) => ({
             ...doc,
@@ -132,30 +156,47 @@ export class DocumentComponent implements AfterViewInit {
           this.applyOperation(incomingOp);
         });
 
+        this.socket.selection$.subscribe((selection) => {
+          this.selections.update(
+            (selections) =>
+              new Map(selections.set(selection.performedBy, selection))
+          );
+        });
+
         this.socket.userJoin$.subscribe((payload) => {
           this.presentUsers.set(payload.socketId, payload.username);
-          console.log(payload, 'joined');
+          console.log(payload.username, 'joined');
 
-          console.log('joinedUsers:', [...this.presentUsers.entries()]);
+          console.log('Present users:', [...this.presentUsers.entries()]);
         });
 
         this.socket.userLeave$.subscribe((socketId) => {
           this.presentUsers.delete(socketId);
 
-          console.log('joinedUsers:', [...this.presentUsers.entries()]);
+          console.log('Present users:', [...this.presentUsers.entries()]);
+
+          this.selections.update((selections) => {
+            selections.delete(socketId);
+            return new Map(selections);
+          });
         });
       });
   }
 
   applyOperation(incomingOp: OperationWrapper) {
     if (incomingOp.operation.type === 'insert') {
-      this.selections.set(incomingOp.performedBy, {
-        docId: incomingOp.docId,
-        revision: incomingOp.revision,
-        performedBy: incomingOp.performedBy,
-        from: incomingOp.operation.position + incomingOp.operation.length,
-        to: incomingOp.operation.position + incomingOp.operation.length,
-      });
+      this.selections.update(
+        (selections) =>
+          new Map(
+            selections.set(incomingOp.performedBy, {
+              docId: incomingOp.docId,
+              revision: incomingOp.revision,
+              performedBy: incomingOp.performedBy,
+              from: incomingOp.operation.position + incomingOp.operation.length,
+              to: incomingOp.operation.position + incomingOp.operation.length,
+            })
+          )
+      );
 
       this.view.dispatch({
         changes: {
@@ -164,13 +205,18 @@ export class DocumentComponent implements AfterViewInit {
         },
       });
     } else {
-      this.selections.set(incomingOp.performedBy, {
-        docId: incomingOp.docId,
-        revision: incomingOp.revision,
-        performedBy: incomingOp.performedBy,
-        from: incomingOp.operation.position,
-        to: incomingOp.operation.position,
-      });
+      this.selections.update(
+        (selections) =>
+          new Map(
+            selections.set(incomingOp.performedBy, {
+              docId: incomingOp.docId,
+              revision: incomingOp.revision,
+              performedBy: incomingOp.performedBy,
+              from: incomingOp.operation.position,
+              to: incomingOp.operation.position,
+            })
+          )
+      );
 
       this.view.dispatch({
         changes: {
@@ -188,21 +234,31 @@ export class DocumentComponent implements AfterViewInit {
         this.listenChangesUpdate(value, transaction),
     });
 
-    // setInterval(() => {
-    //   arr.push(arr.length);
-    //   this.view.dispatch();
-    // }, 1000);
-
     const getCursorTooltips = (): readonly Tooltip[] => {
-      return [...this.selections.entries()].map(([username, selection]) => {
+      return [...this.selections().entries()].map(([username, selection]) => {
         return {
           pos: selection.to,
           above: true,
           strictSide: true,
           arrow: true,
           create: () => {
-            let dom = document.createElement('div');
+            const dom = document.createElement('div');
             dom.className = 'cm-tooltip-cursor';
+            dom.id = username;
+            dom.style.backgroundColor = hashStringToColor(username);
+            dom.style.color = 'black';
+
+            // setTimeout(() => {
+            //   (
+            //     document.querySelector(
+            //       `#${username} .cm-tooltip-arrow:before`
+            //     ) as any
+            //   ).style.setProperty(
+            //     'border-top',
+            //     `7px solid ${hashStringToColor(username)}`
+            //   );
+            // }, 0);
+
             dom.textContent = username;
             return { dom };
           },
@@ -222,15 +278,21 @@ export class DocumentComponent implements AfterViewInit {
     });
 
     this.socket.selection$.subscribe((selection) => {
-      this.selections.set(selection.performedBy, selection);
-      // TODO: something smarter than manual update trigger
+      this.selections.update(
+        (selections) =>
+          new Map(selections.set(selection.performedBy, selection))
+      );
+      // TODO: Something smarter than manual update trigger
       this.view.dispatch();
     });
 
     this.socket.userLeave$.subscribe((socketId) => {
-      // TODO: username or socketId?
-      this.selections.delete(socketId);
-      // TODO: something smarter than manual update trigger
+      // TODO: Username or socketId?
+      this.selections.update((selections) => {
+        selections.delete(socketId);
+        return new Map(selections);
+      });
+      // TODO: Something smarter than manual update trigger
       this.view.dispatch();
     });
 
@@ -250,7 +312,7 @@ export class DocumentComponent implements AfterViewInit {
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
-        json1PresenceDisplay(this.socket.selection$, this.socket.userLeave$),
+        userPresenceExtension(this.injector, this.selections),
         [cursorTooltipBaseTheme, cursorTooltipField],
       ],
     });
@@ -278,11 +340,10 @@ export class DocumentComponent implements AfterViewInit {
         return;
       }
 
-      this.pendingChangesQueue
-        .dequeue()
-        .map((op) =>
-          this.socket.emitOperation(op).subscribe(this.ackHandler())
-        );
+      this.pendingChangesQueue.dequeue().map((op) => {
+        this.socket.emitOperation(op).subscribe(this.ackHandler());
+        this.transformSelectionsAgainstIncomingOperation(op);
+      });
     };
   }
 
@@ -295,12 +356,9 @@ export class DocumentComponent implements AfterViewInit {
       typeof annotation === 'string' &&
       annotation.startsWith('select')
     ) {
-      console.log(transaction);
       const range = transaction.selection!.main;
 
-      console.log(range);
-
-      this.socket.emit<Selection>('selection', {
+      this.socket.emit<TextSelection>('selection', {
         docId: this.doc().id,
         revision: this.doc().revision,
         performedBy: localStorage.getItem('user')!,
@@ -375,11 +433,10 @@ export class DocumentComponent implements AfterViewInit {
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
 
-          this.pendingChangesQueue
-            .dequeue()
-            .map((op) =>
-              this.socket.emitOperation(op).subscribe(this.ackHandler())
-            );
+          this.pendingChangesQueue.dequeue().map((op) => {
+            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.transformSelectionsAgainstIncomingOperation(op);
+          });
         }
       } else {
         const operation: OperationWrapper = {
@@ -399,16 +456,16 @@ export class DocumentComponent implements AfterViewInit {
         };
 
         this.pendingChangesQueue.enqueue([operation]);
+
         console.log({ operation });
 
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
 
-          this.pendingChangesQueue
-            .dequeue()
-            .map((op) =>
-              this.socket.emitOperation(op).subscribe(this.ackHandler())
-            );
+          this.pendingChangesQueue.dequeue().map((op) => {
+            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.transformSelectionsAgainstIncomingOperation(op);
+          });
         }
       }
     }

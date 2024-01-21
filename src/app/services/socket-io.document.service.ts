@@ -6,9 +6,11 @@ import {
   OperationAck,
   OperationWrapper,
   UserInfo,
-} from './models';
-import { Constants } from '../constants';
-import { SocketEvent } from './socket-events';
+  UserJoined,
+  UserLeft,
+} from '../models';
+import { Constants } from '../../constants';
+import { SocketEvent } from '../socket-events';
 
 @Injectable({
   providedIn: 'root',
@@ -22,14 +24,14 @@ export class SocketIoService {
   public operation$ = new Observable<OperationWrapper>();
   public selection$ = new Observable<TextSelection>();
   public userJoin$ = new Observable<UserInfo>();
-  public userLeave$ = new Observable<string>();
+  public userLeave$ = new Observable<UserInfo>();
 
   constructor() {}
 
   connect(docId: string) {
     const username = localStorage.getItem('user');
 
-    this.socket = io(`${Constants.WS_URL}?docId=${docId}&user=${username}`);
+    this.socket = io(`${Constants.WS_URL}?docId=${docId}&username=${username}`);
 
     this.connect$ = new Observable<string>((observer) => {
       this.socket.on('connect', () => {
@@ -38,18 +40,12 @@ export class SocketIoService {
       });
     });
 
-    this.socket.on('operation', (incomingOpStr: string) => {
-      const incomingOp: OperationWrapper = JSON.parse(incomingOpStr);
-
-      console.log('socket operation response:', incomingOp);
-
+    this.socket.on('operation', (incomingOp: OperationWrapper) => {
       this.operation.set(incomingOp);
     });
 
     this.operation$ = new Observable<OperationWrapper>((observer) => {
-      this.socket.on('operation', (incomingOpStr: string) => {
-        const incomingOp: OperationWrapper = JSON.parse(incomingOpStr);
-
+      this.socket.on('operation', (incomingOp: OperationWrapper) => {
         console.log('Socket operation response:', incomingOp);
 
         observer.next(incomingOp);
@@ -57,29 +53,28 @@ export class SocketIoService {
     });
 
     this.selection$ = new Observable<TextSelection>((observer) => {
-      this.socket.on('selection', (selection: string) => {
-        const incomingSelection: TextSelection = JSON.parse(selection);
-
-        console.log('Socket selection response:', incomingSelection);
-
-        observer.next(incomingSelection);
+      this.socket.on('selection', (selection: TextSelection) => {
+        observer.next(selection);
       });
     });
 
     this.userJoin$ = new Observable<UserInfo>((observer) => {
-      this.socket.on('user_joined_doc', (payloadStr: string) => {
-        const payload: UserInfo = JSON.parse(payloadStr);
+      this.socket.on('user_joined_doc', (payload) => {
         observer.next(payload);
       });
     });
 
-    this.userLeave$ = new Observable<string>((observer) => {
-      this.socket.on('user_left_doc', (socketId: string) => {
-        console.log('Socket.IO disconnected', socketId);
-
-        observer.next(socketId);
+    this.userLeave$ = new Observable<UserInfo>((observer) => {
+      this.socket.on('user_left_doc', (payload) => {
+        observer.next(payload);
       });
     });
+  }
+
+  disconnect() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   }
 
   emitOperation(operation: OperationWrapper) {

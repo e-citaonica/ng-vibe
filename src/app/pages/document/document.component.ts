@@ -1,4 +1,10 @@
-import { OperationAck, OperationWrapper, TextSelection } from '../models';
+import {
+  OperationAck,
+  OperationWrapper,
+  TextOperation,
+  TextSelection,
+  UserInfo,
+} from '../../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -6,6 +12,7 @@ import {
   Component,
   ElementRef,
   Injector,
+  OnDestroy,
   ViewChild,
   inject,
   signal,
@@ -29,33 +36,42 @@ import { EditorState, StateField, Transaction } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Queue } from '../queue';
-import { transformOperation } from '../operation-transformations';
-import { SocketIoService } from '../socket-io.service';
-import { Constants } from '../../constants';
+import { Queue } from '../../util/queue';
+import { transformOperation } from '../../operation-transformations';
+import { SocketIoService } from '../../services/socket-io.document.service';
+import { Constants } from '../../../constants';
 import {
   hashStringToColor,
   cursorTooltipBaseTheme,
   userPresenceExtension,
-} from '../user-selection-widget';
-import { transformSelection } from '../selection-transformations';
+} from '../../user-selection-widget';
+import { transformSelection } from '../../selection-transformations';
+import { DocumentService } from '../../services/document.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject, take, takeUntil } from 'rxjs';
+import { AngularMaterialModule } from '../../angular-material.module';
 
 export const arr = [0];
 
 @Component({
   selector: 'app-document',
   standalone: true,
-  imports: [FormsModule, CommonModule],
+  imports: [CommonModule, AngularMaterialModule, RouterModule],
   templateUrl: './document.component.html',
   styleUrl: './document.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DocumentComponent implements AfterViewInit {
+export class DocumentComponent implements AfterViewInit, OnDestroy {
   http = inject(HttpClient);
+  injector = inject(Injector);
+  snackbar = inject(MatSnackBar);
   route = inject(ActivatedRoute);
-  socket = inject(SocketIoService);
+  socketIOService = inject(SocketIoService);
+  documentService = inject(DocumentService);
+
+  private onDestroy$: Subject<void> = new Subject();
 
   @ViewChild('codeMirror') private cm!: ElementRef<HTMLDivElement>;
 
@@ -70,19 +86,13 @@ export class DocumentComponent implements AfterViewInit {
   state!: EditorState;
   listenChangesExtension!: StateField<number>;
 
-  presentUsers = new Map<string, string>();
+  presentUsers = new Map<string, UserInfo>();
 
   // All local changes which have not been sent to the server
   pendingChangesQueue = new Queue<OperationWrapper[]>();
+  selections = signal(new Map<string, TextSelection>());
 
   startedSendingEvents = false;
-
-  selections = signal(new Map<string, TextSelection>());
-  injector: Injector;
-
-  constructor() {
-    this.injector = inject(Injector);
-  }
 
   transformPendingOperationsAgainstIncomingOperation(
     incoming: OperationWrapper
@@ -131,18 +141,17 @@ export class DocumentComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     const id = this.route.snapshot.params['id'];
-    this.socket.connect(id);
+    this.socketIOService.connect(id);
 
-    this.socket.connect$.subscribe((socketId) => {
-      this.http
-        .get<Document>(`${Constants.API_URL}/doc/${id}`)
-        .subscribe((doc) => {
-          this.setupCodeMirror(doc);
-          this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
+    this.socketIOService.connect$.subscribe((socketId) => {
+      this.documentService.get(id).subscribe((doc) => {
+        this.setupCodeMirror(doc);
 
-          this.doc.set(doc);
+        this.doc.set(doc);
 
-          this.socket.operation$.subscribe((incomingOp) => {
+        this.socketIOService.operation$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((incomingOp) => {
             console.log('socket operation response:', incomingOp);
 
             this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
@@ -156,22 +165,41 @@ export class DocumentComponent implements AfterViewInit {
             this.applyOperation(incomingOp);
           });
 
-          this.socket.selection$.subscribe((selection) => {
+        this.socketIOService.selection$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((selection) => {
             this.selections.update(
               (selections) =>
                 new Map(selections.set(selection.performedBy, selection))
             );
           });
 
-          this.socket.userJoin$.subscribe((payload) => {
-            this.presentUsers.set(payload.socketId, payload.username);
-            console.log(payload.username, 'joined');
+        this.socketIOService.userJoin$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((payload) => {
+            this.presentUsers.set(payload.sessionId, payload);
+
+            this.snackbar.open(`${payload.username} joined!`, 'Info', {
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              duration: 3000,
+              panelClass: ['green-snackbar'],
+            });
 
             console.log('Present users:', [...this.presentUsers.entries()]);
           });
 
-          this.socket.userLeave$.subscribe((socketId) => {
-            this.presentUsers.delete(socketId);
+        this.socketIOService.userLeave$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((payload) => {
+            this.snackbar.open(`${payload.username} left!`, 'Info', {
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              duration: 3000,
+              panelClass: ['green-snackbar'],
+            });
+
+            this.presentUsers.delete(payload.sessionId);
 
             console.log('Present users:', [...this.presentUsers.entries()]);
 
@@ -180,8 +208,14 @@ export class DocumentComponent implements AfterViewInit {
               return new Map(selections);
             });
           });
-        });
+      });
     });
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
+    this.socketIOService.disconnect();
   }
 
   applyOperation(incomingOp: OperationWrapper) {
@@ -278,7 +312,7 @@ export class DocumentComponent implements AfterViewInit {
       provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
     });
 
-    this.socket.selection$.subscribe((selection) => {
+    this.socketIOService.selection$.subscribe((selection) => {
       this.selections.update(
         (selections) =>
           new Map(selections.set(selection.performedBy, selection))
@@ -287,10 +321,10 @@ export class DocumentComponent implements AfterViewInit {
       this.view.dispatch();
     });
 
-    this.socket.userLeave$.subscribe((socketId) => {
+    this.socketIOService.userLeave$.subscribe((payload) => {
       // TODO: Username or socketId?
       this.selections.update((selections) => {
-        selections.delete(socketId);
+        selections.delete(payload.sessionId);
         return new Map(selections);
       });
       // TODO: Something smarter than manual update trigger
@@ -342,7 +376,8 @@ export class DocumentComponent implements AfterViewInit {
       }
 
       this.pendingChangesQueue.dequeue().map((op) => {
-        this.socket.emitOperation(op).subscribe(this.ackHandler());
+        this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
+        // this.transformSelectionsAgainstIncomingOperation(op);
       });
     };
   }
@@ -357,8 +392,7 @@ export class DocumentComponent implements AfterViewInit {
       annotation.startsWith('select')
     ) {
       const range = transaction.selection!.main;
-
-      this.socket.emit<TextSelection>('selection', {
+      this.socketIOService.emit<TextSelection>('selection', {
         docId: this.doc().id,
         revision: this.doc().revision,
         performedBy: localStorage.getItem('user')!,
@@ -436,7 +470,8 @@ export class DocumentComponent implements AfterViewInit {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue.dequeue().map((op) => {
-            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
+            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       } else {
@@ -465,7 +500,8 @@ export class DocumentComponent implements AfterViewInit {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue.dequeue().map((op) => {
-            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
+            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       }
@@ -473,4 +509,40 @@ export class DocumentComponent implements AfterViewInit {
 
     return value + 1;
   }
+
+  tryMerge(
+    op1: TextOperation,
+    op2: TextOperation
+  ): { success: boolean; mergedOp: TextOperation | null } {
+    if (op1.type != op2.type) return { success: false, mergedOp: null };
+
+    if (op1.type === 'insert' && op1.position === op2.position - op1.length) {
+      return {
+        success: true,
+        mergedOp: {
+          type: op1.type,
+          position: op1.position,
+          operand: op1.operand ?? '' + op2.operand ?? '',
+          length: op1.length + op2.length,
+        },
+      };
+    } else if (
+      op1.type === 'delete' &&
+      op2.position === op1.position - op2.length
+    ) {
+      return {
+        success: true,
+        mergedOp: {
+          type: op1.type,
+          position: op2.position,
+          operand: null,
+          length: op1.length + op2.length,
+        },
+      };
+    }
+
+    return { success: false, mergedOp: null };
+  }
+
+  leaveDocument() {}
 }

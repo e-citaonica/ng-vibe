@@ -1,4 +1,4 @@
-import { Document } from './document/document.model';
+import { Document } from './pages/document/document.model';
 
 export type TextOperation = {
   type: 'insert' | 'delete';
@@ -25,6 +25,13 @@ export type TextSelection = {
 };
 
 export type UserInfo = {
-  socketId: string;
+  sessionId: string;
   username: string;
 };
+
+export type UserJoined = {
+  docId: string;
+  username: string;
+};
+
+export type UserLeft = UserJoined;

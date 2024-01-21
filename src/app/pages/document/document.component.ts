@@ -5,7 +5,6 @@ import {
   TextSelection,
   UserInfo,
 } from '../../models';
-import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -41,7 +40,6 @@ import { CommonModule } from '@angular/common';
 import { Queue } from '../../util/queue';
 import { transformOperation } from '../../operation-transformations';
 import { SocketIoService } from '../../services/socket-io.document.service';
-import { Constants } from '../../../constants';
 import {
   hashStringToColor,
   cursorTooltipBaseTheme,
@@ -50,7 +48,7 @@ import {
 import { transformSelection } from '../../selection-transformations';
 import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, take, takeUntil } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
 
 export const arr = [0];
@@ -60,7 +58,6 @@ export const arr = [0];
   standalone: true,
   imports: [CommonModule, AngularMaterialModule, RouterModule],
   templateUrl: './document.component.html',
-  styleUrl: './document.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DocumentComponent implements AfterViewInit, OnDestroy {

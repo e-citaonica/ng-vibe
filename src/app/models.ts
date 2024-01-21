@@ -1,4 +1,4 @@
-import { Document } from './document/document.model';
+import { Document } from './pages/document/document.model';
 
 export type TextOperation = {
   type: 'insert' | 'delete';

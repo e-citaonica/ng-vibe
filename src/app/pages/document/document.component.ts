@@ -4,7 +4,7 @@ import {
   TextOperation,
   TextSelection,
   UserInfo,
-} from '../models';
+} from '../../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -36,28 +36,29 @@ import { EditorState, StateField, Transaction } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Queue } from '../util/queue';
-import { transformOperation } from '../operation-transformations';
-import { SocketIoService } from '../services/socket-io.document.service';
-import { Constants } from '../../constants';
+import { Queue } from '../../util/queue';
+import { transformOperation } from '../../operation-transformations';
+import { SocketIoService } from '../../services/socket-io.document.service';
+import { Constants } from '../../../constants';
 import {
   hashStringToColor,
   cursorTooltipBaseTheme,
   userPresenceExtension,
-} from '../user-selection-widget';
-import { transformSelection } from '../selection-transformations';
-import { DocumentService } from '../services/document.service';
+} from '../../user-selection-widget';
+import { transformSelection } from '../../selection-transformations';
+import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, take, takeUntil } from 'rxjs';
+import { AngularMaterialModule } from '../../angular-material.module';
 
 export const arr = [0];
 
 @Component({
   selector: 'app-document',
   standalone: true,
-  imports: [FormsModule, CommonModule],
+  imports: [CommonModule, AngularMaterialModule, RouterModule],
   templateUrl: './document.component.html',
   styleUrl: './document.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -542,4 +543,6 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
     return { success: false, mergedOp: null };
   }
+
+  leaveDocument() {}
 }

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { AngularMaterialModule } from '../../angular-material.module';
 
 @Component({
@@ -8,4 +8,6 @@ import { AngularMaterialModule } from '../../angular-material.module';
   templateUrl: './document-card.component.html',
   styleUrl: './document-card.component.scss',
 })
-export class DocumentCardComponent {}
+export class DocumentCardComponent {
+  @Input('document') document?: Document;
+}

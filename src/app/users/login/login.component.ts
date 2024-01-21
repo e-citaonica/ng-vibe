@@ -43,14 +43,8 @@ export class LoginComponent {
     }),
   });
 
-  setUsername() {
-    if (!this.form.value) {
-      alert('Enter username.');
-    }
-
+  onSubmit() {
     localStorage.setItem('user', this.form.value.username!);
     this.router.navigate(['/home']);
   }
-
-  onSubmit() {}
 }

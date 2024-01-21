@@ -35,7 +35,7 @@ export class Queue<T> {
     }
   }
 
-  poolLast() {
+  poolLast(): T {
     if (this.isEmpty()) {
       throw new Error('Queue is empty.');
     } else {

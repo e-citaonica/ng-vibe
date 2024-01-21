@@ -6,9 +6,9 @@ import {
   OperationAck,
   OperationWrapper,
   UserInfo,
-} from './models';
-import { Constants } from '../constants';
-import { SocketEvent } from './socket-events';
+} from '../models';
+import { Constants } from '../../constants';
+import { SocketEvent } from '../socket-events';
 
 @Injectable({
   providedIn: 'root',
@@ -38,18 +38,12 @@ export class SocketIoService {
       });
     });
 
-    this.socket.on('operation', (incomingOpStr: string) => {
-      const incomingOp: OperationWrapper = JSON.parse(incomingOpStr);
-
-      console.log('socket operation response:', incomingOp);
-
+    this.socket.on('operation', (incomingOp: OperationWrapper) => {
       this.operation.set(incomingOp);
     });
 
     this.operation$ = new Observable<OperationWrapper>((observer) => {
-      this.socket.on('operation', (incomingOpStr: string) => {
-        const incomingOp: OperationWrapper = JSON.parse(incomingOpStr);
-
+      this.socket.on('operation', (incomingOp: OperationWrapper) => {
         console.log('Socket operation response:', incomingOp);
 
         observer.next(incomingOp);
@@ -57,18 +51,13 @@ export class SocketIoService {
     });
 
     this.selection$ = new Observable<TextSelection>((observer) => {
-      this.socket.on('selection', (selection: string) => {
-        const incomingSelection: TextSelection = JSON.parse(selection);
-
-        console.log('Socket selection response:', incomingSelection);
-
-        observer.next(incomingSelection);
+      this.socket.on('selection', (selection: TextSelection) => {
+        observer.next(selection);
       });
     });
 
     this.userJoin$ = new Observable<UserInfo>((observer) => {
-      this.socket.on('user_joined_doc', (payloadStr: string) => {
-        const payload: UserInfo = JSON.parse(payloadStr);
+      this.socket.on('user_joined_doc', (payload: UserInfo) => {
         observer.next(payload);
       });
     });

@@ -1,4 +1,9 @@
-import { OperationAck, OperationWrapper, TextSelection } from '../models';
+import {
+  OperationAck,
+  OperationWrapper,
+  TextOperation,
+  TextSelection,
+} from '../models';
 import { FormsModule } from '@angular/forms';
 import {
   AfterViewInit,
@@ -31,9 +36,9 @@ import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Queue } from '../queue';
+import { Queue } from '../util/queue';
 import { transformOperation } from '../operation-transformations';
-import { SocketIoService } from '../socket-io.service';
+import { SocketIoService } from '../services/socket-io.document.service';
 import { Constants } from '../../constants';
 import {
   hashStringToColor,
@@ -41,6 +46,7 @@ import {
   userPresenceExtension,
 } from '../user-selection-widget';
 import { transformSelection } from '../selection-transformations';
+import { DocumentService } from '../services/document.service';
 
 export const arr = [0];
 
@@ -56,6 +62,7 @@ export class DocumentComponent implements AfterViewInit {
   http = inject(HttpClient);
   route = inject(ActivatedRoute);
   socket = inject(SocketIoService);
+  documentService = inject(DocumentService);
 
   @ViewChild('codeMirror') private cm!: ElementRef<HTMLDivElement>;
 
@@ -134,53 +141,51 @@ export class DocumentComponent implements AfterViewInit {
     this.socket.connect(id);
 
     this.socket.connect$.subscribe((socketId) => {
-      this.http
-        .get<Document>(`${Constants.API_URL}/doc/${id}`)
-        .subscribe((doc) => {
-          this.setupCodeMirror(doc);
-          this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
+      this.documentService.get(id).subscribe((doc) => {
+        this.setupCodeMirror(doc);
+        this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
 
-          this.doc.set(doc);
+        this.doc.set(doc);
 
-          this.socket.operation$.subscribe((incomingOp) => {
-            console.log('socket operation response:', incomingOp);
+        this.socket.operation$.subscribe((incomingOp) => {
+          console.log('socket operation response:', incomingOp);
 
-            this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
-            this.transformSelectionsAgainstIncomingOperation(incomingOp);
+          this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
+          this.transformSelectionsAgainstIncomingOperation(incomingOp);
 
-            this.doc.update((doc) => ({
-              ...doc,
-              revision: incomingOp.revision,
-            }));
+          this.doc.update((doc) => ({
+            ...doc,
+            revision: incomingOp.revision,
+          }));
 
-            this.applyOperation(incomingOp);
-          });
+          this.applyOperation(incomingOp);
+        });
 
-          this.socket.selection$.subscribe((selection) => {
-            this.selections.update(
-              (selections) =>
-                new Map(selections.set(selection.performedBy, selection))
-            );
-          });
+        this.socket.selection$.subscribe((selection) => {
+          this.selections.update(
+            (selections) =>
+              new Map(selections.set(selection.performedBy, selection))
+          );
+        });
 
-          this.socket.userJoin$.subscribe((payload) => {
-            this.presentUsers.set(payload.socketId, payload.username);
-            console.log(payload.username, 'joined');
+        this.socket.userJoin$.subscribe((payload) => {
+          this.presentUsers.set(payload.socketId, payload.username);
+          console.log(payload.username, 'joined');
 
-            console.log('Present users:', [...this.presentUsers.entries()]);
-          });
+          console.log('Present users:', [...this.presentUsers.entries()]);
+        });
 
-          this.socket.userLeave$.subscribe((socketId) => {
-            this.presentUsers.delete(socketId);
+        this.socket.userLeave$.subscribe((socketId) => {
+          this.presentUsers.delete(socketId);
 
-            console.log('Present users:', [...this.presentUsers.entries()]);
+          console.log('Present users:', [...this.presentUsers.entries()]);
 
-            this.selections.update((selections) => {
-              selections.delete(socketId);
-              return new Map(selections);
-            });
+          this.selections.update((selections) => {
+            selections.delete(socketId);
+            return new Map(selections);
           });
         });
+      });
     });
   }
 
@@ -358,7 +363,6 @@ export class DocumentComponent implements AfterViewInit {
       annotation.startsWith('select')
     ) {
       const range = transaction.selection!.main;
-
       this.socket.emit<TextSelection>('selection', {
         docId: this.doc().id,
         revision: this.doc().revision,
@@ -458,10 +462,6 @@ export class DocumentComponent implements AfterViewInit {
           },
         };
 
-        // if (this.pendingChangesQueue.isNotEmpty()) {
-        //   const prevOp = this.pendingChangesQueue.poolLast()
-        //   { success, mergedOp } = tryMerge(prevOp, operation)
-        // } else {
         this.pendingChangesQueue.enqueue([operation]);
         this.transformSelectionsAgainstIncomingOperation(operation);
 
@@ -481,9 +481,37 @@ export class DocumentComponent implements AfterViewInit {
     return value + 1;
   }
 
-  // tryMerge(op1: OperationWrapper, op2: OperationWrapper): { success: boolean, mergedOp: OperationWrapper } {
-  //   if (op1.operation.type === op2.operation.type) {
-  //     if (op1.operation.type === 'insert' && op1.)
-  //   }
-  // }
+  tryMerge(
+    op1: TextOperation,
+    op2: TextOperation
+  ): { success: boolean; mergedOp: TextOperation | null } {
+    if (op1.type != op2.type) return { success: false, mergedOp: null };
+
+    if (op1.type === 'insert' && op1.position === op2.position - op1.length) {
+      return {
+        success: true,
+        mergedOp: {
+          type: op1.type,
+          position: op1.position,
+          operand: op1.operand ?? '' + op2.operand ?? '',
+          length: op1.length + op2.length,
+        },
+      };
+    } else if (
+      op1.type === 'delete' &&
+      op2.position === op1.position - op2.length
+    ) {
+      return {
+        success: true,
+        mergedOp: {
+          type: op1.type,
+          position: op2.position,
+          operand: null,
+          length: op1.length + op2.length,
+        },
+      };
+    }
+
+    return { success: false, mergedOp: null };
+  }
 }

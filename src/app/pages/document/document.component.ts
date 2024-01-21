@@ -4,8 +4,7 @@ import {
   TextOperation,
   TextSelection,
   UserInfo,
-} from '../../models';
-import { FormsModule } from '@angular/forms';
+} from '../../model/models';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -18,7 +17,7 @@ import {
   signal,
 } from '@angular/core';
 export class AppModule {}
-import { Document } from './document.model';
+import { Document } from '../../model/document.model';
 import {
   EditorView,
   Tooltip,
@@ -38,7 +37,6 @@ import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Queue } from '../../util/queue';
 import { transformOperation } from '../../operation-transformations';
 import { SocketIoService } from '../../services/socket-io.document.service';
 import { Constants } from '../../../constants';
@@ -52,6 +50,8 @@ import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, take, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
+import { Queue } from '../../util/queue';
+import { DocumentBuffer } from './document-buffer';
 
 export const arr = [0];
 
@@ -88,38 +88,38 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
   presentUsers = new Map<string, UserInfo>();
 
-  // All local changes which have not been sent to the server
   pendingChangesQueue = new Queue<OperationWrapper[]>();
+  documentBuffer = new DocumentBuffer();
   selections = signal(new Map<string, TextSelection>());
 
   startedSendingEvents = false;
 
-  transformPendingOperationsAgainstIncomingOperation(
-    incoming: OperationWrapper
-  ) {
-    for (let pendingOpWrappers of this.pendingChangesQueue) {
-      const arr: OperationWrapper[] = [];
+  // transformPendingOperationsAgainstIncomingOperation(
+  //   incoming: OperationWrapper
+  // ) {
+  //   for (let pendingOpWrappers of this.pendingChangesQueue) {
+  //     const arr: OperationWrapper[] = [];
 
-      for (const pendingOpWrapper of pendingOpWrappers) {
-        const transformedOps = transformOperation(
-          pendingOpWrapper.operation,
-          incoming.operation
-        );
+  //     for (const pendingOpWrapper of pendingOpWrappers) {
+  //       const transformedOps = transformOperation(
+  //         pendingOpWrapper.operation,
+  //         incoming.operation
+  //       );
 
-        const transformedOpWrappers: OperationWrapper[] = transformedOps.map(
-          (op) => ({
-            ...pendingOpWrapper,
-            revision: incoming.revision,
-            operation: op,
-          })
-        );
+  //       const transformedOpWrappers: OperationWrapper[] = transformedOps.map(
+  //         (op) => ({
+  //           ...pendingOpWrapper,
+  //           revision: incoming.revision,
+  //           operation: op,
+  //         })
+  //       );
 
-        arr.push(...transformedOpWrappers);
-      }
+  //       arr.push(...transformedOpWrappers);
+  //     }
 
-      pendingOpWrappers = arr;
-    }
-  }
+  //     pendingOpWrappers = arr;
+  //   }
+  // }
 
   transformSelectionsAgainstIncomingOperation(incoming: OperationWrapper) {
     for (const [username, selection] of this.selections().entries()) {
@@ -154,7 +154,9 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           .subscribe((incomingOp) => {
             console.log('socket operation response:', incomingOp);
 
-            this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
+            this.documentBuffer.transformPendingOperationsAgainstIncomingOperation(
+              incomingOp
+            );
             this.transformSelectionsAgainstIncomingOperation(incomingOp);
 
             this.doc.update((doc) => ({
@@ -364,21 +366,19 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
       this.doc.update((doc) => ({ ...doc, revision: ackRevision.revision }));
 
-      for (const operationWrappers of this.pendingChangesQueue) {
-        operationWrappers.forEach(
-          (wrapper) => (wrapper.revision = ackRevision.revision)
-        );
-      }
+      this.documentBuffer.updatePendingOperations((value) => ({
+        ...value,
+        revision: ackRevision.revision,
+      }));
 
-      if (this.pendingChangesQueue.isEmpty()) {
+      if (!this.documentBuffer.hasPending()) {
         this.startedSendingEvents = false;
         return;
       }
 
-      this.pendingChangesQueue.dequeue().map((op) => {
-        this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
-        // this.transformSelectionsAgainstIncomingOperation(op);
-      });
+      this.socketIOService
+        .emitOperation(this.documentBuffer.dequeue())
+        .subscribe(this.ackHandler());
     };
   }
 
@@ -462,17 +462,15 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
         console.log({ opDelete, opInsert });
 
-        this.pendingChangesQueue.enqueue([opDelete, opInsert]);
+        this.documentBuffer.enqueue(opDelete, opInsert);
         this.transformSelectionsAgainstIncomingOperation(opDelete);
         this.transformSelectionsAgainstIncomingOperation(opInsert);
 
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
-
-          this.pendingChangesQueue.dequeue().map((op) => {
-            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
-            // this.transformSelectionsAgainstIncomingOperation(op);
-          });
+          this.socketIOService
+            .emitOperation(this.documentBuffer.dequeue())
+            .subscribe(this.ackHandler());
         }
       } else {
         const operation: OperationWrapper = {
@@ -491,18 +489,16 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           },
         };
 
-        this.pendingChangesQueue.enqueue([operation]);
+        this.documentBuffer.enqueue(operation);
         this.transformSelectionsAgainstIncomingOperation(operation);
 
         console.log({ operation });
 
         if (!this.startedSendingEvents) {
           this.startedSendingEvents = true;
-
-          this.pendingChangesQueue.dequeue().map((op) => {
-            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
-            // this.transformSelectionsAgainstIncomingOperation(op);
-          });
+          this.socketIOService
+            .emitOperation(this.documentBuffer.dequeue())
+            .subscribe(this.ackHandler());
         }
       }
     }

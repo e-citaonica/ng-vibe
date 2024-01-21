@@ -1,4 +1,4 @@
-import { TextOperation as TextOperation } from './models';
+import { TextOperation as TextOperation } from './model/models';
 
 export const transformOperation = (
   op1: TextOperation,

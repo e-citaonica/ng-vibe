@@ -1,4 +1,4 @@
-import { TextSelection, TextOperation } from './models';
+import { TextSelection, TextOperation } from './model/models';
 
 export const transformSelection = (
   op1: TextSelection,

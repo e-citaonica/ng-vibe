@@ -1,74 +1,134 @@
+class Node<T> {
+  data: T;
+  next: Node<T> | null;
+  prev: Node<T> | null;
+
+  constructor(
+    data: T,
+    prev: Node<T> | null = null,
+    next: Node<T> | null = null
+  ) {
+    this.data = data;
+    this.next = next;
+    this.prev = prev;
+  }
+}
+
 export class Queue<T> {
-  private readonly queue: T[];
-  private start: number;
-  private end: number;
+  private front: Node<T> | null;
+  private rear: Node<T> | null;
 
-  constructor(array: T[] = []) {
-    this.queue = array;
-
-    // pointers
-    this.start = 0;
-    this.end = array.length;
+  constructor() {
+    this.front = null;
+    this.rear = null;
   }
 
-  isEmpty() {
-    return this.end === this.start;
-  }
+  enqueue(data: T): void {
+    const newNode = new Node(data);
 
-  isNotEmpty() {
-    return this.end !== this.start;
-  }
-
-  dequeue() {
     if (this.isEmpty()) {
-      throw new Error('Queue is empty.');
+      this.front = newNode;
+      this.rear = newNode;
     } else {
-      return this.queue[this.start++];
+      if (this.rear) {
+        newNode.prev = this.rear;
+        this.rear.next = newNode;
+        this.rear = newNode;
+      }
     }
   }
 
-  pool() {
-    if (this.isEmpty()) {
-      throw new Error('Queue is empty.');
-    } else {
-      return this.queue[this.start];
+  flatMap(callbackfn: (value: T) => T[] | T) {
+    if (this.isEmpty()) return;
+
+    let current = this.front;
+    while (current !== null) {
+      const mapped: T[] | T = callbackfn(current.data);
+
+      const [newData, ...rest] = Array.isArray(mapped) ? mapped : [mapped];
+      current.data = newData;
+
+      for (const val of rest) {
+        const node: Node<T> = new Node(val, current, current.next);
+        current.next = node;
+        current = current.next;
+      }
+
+      this.rear = current;
+      current = current.next;
     }
   }
 
-  poolLast(): T {
+  dequeue(): T {
     if (this.isEmpty()) {
-      throw new Error('Queue is empty.');
+      throw new Error('Queue is empty');
+    }
+
+    const removedData = this.front!.data;
+    this.front = this.front!.next;
+
+    if (this.front) {
+      this.front.prev = null;
     } else {
-      return this.queue[this.end];
+      this.rear = null;
+    }
+
+    return removedData;
+  }
+
+  peek(): T {
+    if (this.isEmpty()) {
+      throw new Error('Queue is empty');
+    }
+    return this.front!.data;
+  }
+
+  peekLast(): T {
+    if (this.rear === null) {
+      throw new Error('Queue is empty');
+    }
+    return this.rear.data;
+  }
+
+  updateLast(data: T) {
+    if (this.rear !== null) {
+      this.rear.data = data;
     }
   }
 
-  replaceLast(value: T) {
-    if (this.isEmpty()) {
-      this.enqueue(value);
-    } else {
-      this.queue[this.end] = value;
+  isEmpty(): boolean {
+    return this.front === null;
+  }
+
+  isNotEmpty(): boolean {
+    return this.front !== null;
+  }
+
+  print(): void {
+    let current = this.front;
+    const elements: T[] = [];
+
+    while (current !== null) {
+      elements.push(current.data);
+      current = current.next;
     }
+
+    console.log('Queue:', elements);
   }
 
-  enqueue(value: T) {
-    this.queue.push(value);
-    this.end += 1;
-  }
+  [Symbol.iterator](): Iterator<T> {
+    let current = this.front;
 
-  toString() {
-    return `Queue (${this.end - this.start})`;
-  }
-
-  [Symbol.iterator]() {
-    let index = this.start;
     return {
-      next: () =>
-        index < this.end
-          ? {
-              value: this.queue[index++],
-            }
-          : { value: undefined as T, done: true },
+      next: (): IteratorResult<T> => {
+        if (current !== null) {
+          const value = current.data;
+          current = current.next;
+          return { value, done: false };
+        } else {
+          return { value: null as any, done: true };
+        }
+      },
     };
   }
 }

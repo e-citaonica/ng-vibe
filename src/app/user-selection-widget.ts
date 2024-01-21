@@ -7,7 +7,7 @@ import {
 } from '@codemirror/view';
 import { Annotation, RangeSet } from '@codemirror/state';
 import { Observable } from 'rxjs';
-import { TextSelection } from './models';
+import { TextSelection } from './model/models';
 import { Injector, Signal, effect } from '@angular/core';
 
 const h = (str: string): number => {

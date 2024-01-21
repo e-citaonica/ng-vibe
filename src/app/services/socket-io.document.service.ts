@@ -1,16 +1,21 @@
 import { Injectable, signal } from '@angular/core';
 import { Socket, io } from 'socket.io-client';
 import { Observable } from 'rxjs';
+import { Constants } from '../../constants';
 import {
-  TextSelection,
   OperationAck,
   OperationWrapper,
+  TextSelection,
   UserInfo,
-  UserJoined,
-  UserLeft,
-} from '../models';
-import { Constants } from '../../constants';
-import { SocketEvent } from '../socket-events';
+} from '../model/models';
+
+export type SocketEvent =
+  | 'operation'
+  | 'connect'
+  | 'disconnect'
+  | 'selection'
+  | 'user_joined_doc'
+  | 'user_left_doc';
 
 @Injectable({
   providedIn: 'root',

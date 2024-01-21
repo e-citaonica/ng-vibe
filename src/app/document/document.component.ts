@@ -3,6 +3,7 @@ import {
   OperationWrapper,
   TextOperation,
   TextSelection,
+  UserInfo,
 } from '../models';
 import { FormsModule } from '@angular/forms';
 import {
@@ -11,6 +12,7 @@ import {
   Component,
   ElementRef,
   Injector,
+  OnDestroy,
   ViewChild,
   inject,
   signal,
@@ -47,6 +49,8 @@ import {
 } from '../user-selection-widget';
 import { transformSelection } from '../selection-transformations';
 import { DocumentService } from '../services/document.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject, take, takeUntil } from 'rxjs';
 
 export const arr = [0];
 
@@ -58,11 +62,15 @@ export const arr = [0];
   styleUrl: './document.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DocumentComponent implements AfterViewInit {
+export class DocumentComponent implements AfterViewInit, OnDestroy {
   http = inject(HttpClient);
+  injector = inject(Injector);
+  snackbar = inject(MatSnackBar);
   route = inject(ActivatedRoute);
-  socket = inject(SocketIoService);
+  socketIOService = inject(SocketIoService);
   documentService = inject(DocumentService);
+
+  private onDestroy$: Subject<void> = new Subject();
 
   @ViewChild('codeMirror') private cm!: ElementRef<HTMLDivElement>;
 
@@ -77,19 +85,13 @@ export class DocumentComponent implements AfterViewInit {
   state!: EditorState;
   listenChangesExtension!: StateField<number>;
 
-  presentUsers = new Map<string, string>();
+  presentUsers = new Map<string, UserInfo>();
 
   // All local changes which have not been sent to the server
   pendingChangesQueue = new Queue<OperationWrapper[]>();
+  selections = signal(new Map<string, TextSelection>());
 
   startedSendingEvents = false;
-
-  selections = signal(new Map<string, TextSelection>());
-  injector: Injector;
-
-  constructor() {
-    this.injector = inject(Injector);
-  }
 
   transformPendingOperationsAgainstIncomingOperation(
     incoming: OperationWrapper
@@ -138,55 +140,81 @@ export class DocumentComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     const id = this.route.snapshot.params['id'];
-    this.socket.connect(id);
+    this.socketIOService.connect(id);
 
-    this.socket.connect$.subscribe((socketId) => {
+    this.socketIOService.connect$.subscribe((socketId) => {
       this.documentService.get(id).subscribe((doc) => {
         this.setupCodeMirror(doc);
-        this.socket.emit('user_joined_doc', localStorage.getItem('user')!);
 
         this.doc.set(doc);
 
-        this.socket.operation$.subscribe((incomingOp) => {
-          console.log('socket operation response:', incomingOp);
+        this.socketIOService.operation$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((incomingOp) => {
+            console.log('socket operation response:', incomingOp);
 
-          this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
-          this.transformSelectionsAgainstIncomingOperation(incomingOp);
+            this.transformPendingOperationsAgainstIncomingOperation(incomingOp);
+            this.transformSelectionsAgainstIncomingOperation(incomingOp);
 
-          this.doc.update((doc) => ({
-            ...doc,
-            revision: incomingOp.revision,
-          }));
+            this.doc.update((doc) => ({
+              ...doc,
+              revision: incomingOp.revision,
+            }));
 
-          this.applyOperation(incomingOp);
-        });
-
-        this.socket.selection$.subscribe((selection) => {
-          this.selections.update(
-            (selections) =>
-              new Map(selections.set(selection.performedBy, selection))
-          );
-        });
-
-        this.socket.userJoin$.subscribe((payload) => {
-          this.presentUsers.set(payload.socketId, payload.username);
-          console.log(payload.username, 'joined');
-
-          console.log('Present users:', [...this.presentUsers.entries()]);
-        });
-
-        this.socket.userLeave$.subscribe((socketId) => {
-          this.presentUsers.delete(socketId);
-
-          console.log('Present users:', [...this.presentUsers.entries()]);
-
-          this.selections.update((selections) => {
-            selections.delete(socketId);
-            return new Map(selections);
+            this.applyOperation(incomingOp);
           });
-        });
+
+        this.socketIOService.selection$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((selection) => {
+            this.selections.update(
+              (selections) =>
+                new Map(selections.set(selection.performedBy, selection))
+            );
+          });
+
+        this.socketIOService.userJoin$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((payload) => {
+            this.presentUsers.set(payload.sessionId, payload);
+
+            this.snackbar.open(`${payload.username} joined!`, 'Info', {
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              duration: 3000,
+              panelClass: ['green-snackbar'],
+            });
+
+            console.log('Present users:', [...this.presentUsers.entries()]);
+          });
+
+        this.socketIOService.userLeave$
+          .pipe(takeUntil(this.onDestroy$))
+          .subscribe((payload) => {
+            this.snackbar.open(`${payload.username} left!`, 'Info', {
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              duration: 3000,
+              panelClass: ['green-snackbar'],
+            });
+
+            this.presentUsers.delete(payload.sessionId);
+
+            console.log('Present users:', [...this.presentUsers.entries()]);
+
+            this.selections.update((selections) => {
+              selections.delete(socketId);
+              return new Map(selections);
+            });
+          });
       });
     });
+  }
+
+  ngOnDestroy(): void {
+    this.onDestroy$.next();
+    this.onDestroy$.complete();
+    this.socketIOService.disconnect();
   }
 
   applyOperation(incomingOp: OperationWrapper) {
@@ -283,7 +311,7 @@ export class DocumentComponent implements AfterViewInit {
       provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
     });
 
-    this.socket.selection$.subscribe((selection) => {
+    this.socketIOService.selection$.subscribe((selection) => {
       this.selections.update(
         (selections) =>
           new Map(selections.set(selection.performedBy, selection))
@@ -292,10 +320,10 @@ export class DocumentComponent implements AfterViewInit {
       this.view.dispatch();
     });
 
-    this.socket.userLeave$.subscribe((socketId) => {
+    this.socketIOService.userLeave$.subscribe((payload) => {
       // TODO: Username or socketId?
       this.selections.update((selections) => {
-        selections.delete(socketId);
+        selections.delete(payload.sessionId);
         return new Map(selections);
       });
       // TODO: Something smarter than manual update trigger
@@ -347,7 +375,7 @@ export class DocumentComponent implements AfterViewInit {
       }
 
       this.pendingChangesQueue.dequeue().map((op) => {
-        this.socket.emitOperation(op).subscribe(this.ackHandler());
+        this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
         // this.transformSelectionsAgainstIncomingOperation(op);
       });
     };
@@ -363,7 +391,7 @@ export class DocumentComponent implements AfterViewInit {
       annotation.startsWith('select')
     ) {
       const range = transaction.selection!.main;
-      this.socket.emit<TextSelection>('selection', {
+      this.socketIOService.emit<TextSelection>('selection', {
         docId: this.doc().id,
         revision: this.doc().revision,
         performedBy: localStorage.getItem('user')!,
@@ -441,7 +469,7 @@ export class DocumentComponent implements AfterViewInit {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue.dequeue().map((op) => {
-            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
             // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
@@ -471,7 +499,7 @@ export class DocumentComponent implements AfterViewInit {
           this.startedSendingEvents = true;
 
           this.pendingChangesQueue.dequeue().map((op) => {
-            this.socket.emitOperation(op).subscribe(this.ackHandler());
+            this.socketIOService.emitOperation(op).subscribe(this.ackHandler());
             // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }

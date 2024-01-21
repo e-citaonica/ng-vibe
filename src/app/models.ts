@@ -25,6 +25,13 @@ export type TextSelection = {
 };
 
 export type UserInfo = {
-  socketId: string;
+  sessionId: string;
   username: string;
 };
+
+export type UserJoined = {
+  docId: string;
+  username: string;
+};
+
+export type UserLeft = UserJoined;

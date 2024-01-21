@@ -6,6 +6,8 @@ import {
   OperationAck,
   OperationWrapper,
   UserInfo,
+  UserJoined,
+  UserLeft,
 } from '../models';
 import { Constants } from '../../constants';
 import { SocketEvent } from '../socket-events';
@@ -22,14 +24,14 @@ export class SocketIoService {
   public operation$ = new Observable<OperationWrapper>();
   public selection$ = new Observable<TextSelection>();
   public userJoin$ = new Observable<UserInfo>();
-  public userLeave$ = new Observable<string>();
+  public userLeave$ = new Observable<UserInfo>();
 
   constructor() {}
 
   connect(docId: string) {
     const username = localStorage.getItem('user');
 
-    this.socket = io(`${Constants.WS_URL}?docId=${docId}&user=${username}`);
+    this.socket = io(`${Constants.WS_URL}?docId=${docId}&username=${username}`);
 
     this.connect$ = new Observable<string>((observer) => {
       this.socket.on('connect', () => {
@@ -57,18 +59,22 @@ export class SocketIoService {
     });
 
     this.userJoin$ = new Observable<UserInfo>((observer) => {
-      this.socket.on('user_joined_doc', (payload: UserInfo) => {
+      this.socket.on('user_joined_doc', (payload) => {
         observer.next(payload);
       });
     });
 
-    this.userLeave$ = new Observable<string>((observer) => {
-      this.socket.on('user_left_doc', (socketId: string) => {
-        console.log('Socket.IO disconnected', socketId);
-
-        observer.next(socketId);
+    this.userLeave$ = new Observable<UserInfo>((observer) => {
+      this.socket.on('user_left_doc', (payload) => {
+        observer.next(payload);
       });
     });
+  }
+
+  disconnect() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   }
 
   emitOperation(operation: OperationWrapper) {

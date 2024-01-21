@@ -60,7 +60,6 @@ export const arr = [0];
   standalone: true,
   imports: [CommonModule, AngularMaterialModule, RouterModule],
   templateUrl: './document.component.html',
-  styleUrl: './document.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DocumentComponent implements AfterViewInit, OnDestroy {
@@ -505,40 +504,4 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
     return value + 1;
   }
-
-  tryMerge(
-    op1: TextOperation,
-    op2: TextOperation
-  ): { success: boolean; mergedOp: TextOperation | null } {
-    if (op1.type != op2.type) return { success: false, mergedOp: null };
-
-    if (op1.type === 'insert' && op1.position === op2.position - op1.length) {
-      return {
-        success: true,
-        mergedOp: {
-          type: op1.type,
-          position: op1.position,
-          operand: op1.operand ?? '' + op2.operand ?? '',
-          length: op1.length + op2.length,
-        },
-      };
-    } else if (
-      op1.type === 'delete' &&
-      op2.position === op1.position - op2.length
-    ) {
-      return {
-        success: true,
-        mergedOp: {
-          type: op1.type,
-          position: op2.position,
-          operand: null,
-          length: op1.length + op2.length,
-        },
-      };
-    }
-
-    return { success: false, mergedOp: null };
-  }
-
-  leaveDocument() {}
 }

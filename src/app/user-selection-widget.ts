@@ -43,7 +43,6 @@ export const userPresenceExtension = (
 
         effect(
           () => {
-            console.log('effect !!');
             // Side effect on selection changes.
 
             // Update decorations to reflect new presence state.

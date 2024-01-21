@@ -15,11 +15,39 @@ export class Queue<T> {
     return this.end === this.start;
   }
 
+  isNotEmpty() {
+    return this.end !== this.start;
+  }
+
   dequeue() {
     if (this.isEmpty()) {
       throw new Error('Queue is empty.');
     } else {
       return this.queue[this.start++];
+    }
+  }
+
+  pool() {
+    if (this.isEmpty()) {
+      throw new Error('Queue is empty.');
+    } else {
+      return this.queue[this.start];
+    }
+  }
+
+  poolLast() {
+    if (this.isEmpty()) {
+      throw new Error('Queue is empty.');
+    } else {
+      return this.queue[this.end];
+    }
+  }
+
+  replaceLast(value: T) {
+    if (this.isEmpty()) {
+      this.enqueue(value);
+    } else {
+      this.queue[this.end] = value;
     }
   }
 

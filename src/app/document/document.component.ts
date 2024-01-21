@@ -458,6 +458,10 @@ export class DocumentComponent implements AfterViewInit {
           },
         };
 
+        // if (this.pendingChangesQueue.isNotEmpty()) {
+        //   const prevOp = this.pendingChangesQueue.poolLast()
+        //   { success, mergedOp } = tryMerge(prevOp, operation)
+        // } else {
         this.pendingChangesQueue.enqueue([operation]);
         this.transformSelectionsAgainstIncomingOperation(operation);
 
@@ -476,4 +480,10 @@ export class DocumentComponent implements AfterViewInit {
 
     return value + 1;
   }
+
+  // tryMerge(op1: OperationWrapper, op2: OperationWrapper): { success: boolean, mergedOp: OperationWrapper } {
+  //   if (op1.operation.type === op2.operation.type) {
+  //     if (op1.operation.type === 'insert' && op1.)
+  //   }
+  // }
 }

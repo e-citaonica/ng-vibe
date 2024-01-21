@@ -1,17 +1,30 @@
 <div>
   <div>
     <div>
-      <h2>Login</h2>
+      <h2>Discover documents</h2>
     </div>
 
-    <form>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
       <div>
-        <label for="username">Username</label>
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput formControlName="username" type="text" />
+        </mat-form-field>
       </div>
-      <input id="username" type="text" [(ngModel)]="username" name="username" />
+      <div>
+        <mat-form-field appearance="outline">
+          <mat-label>Document UUID</mat-label>
+          <input
+            matInput
+            formControlName="document"
+            type="text"
+            (keydown.enter)="onSubmit()"
+          />
+        </mat-form-field>
+      </div>
 
       <div>
-        <button (click)="setUsername()">Login</button>
+        <button mat-raised-button color="primary" class="w-full">Join</button>
       </div>
     </form>
   </div>

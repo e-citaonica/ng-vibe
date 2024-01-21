@@ -3,7 +3,20 @@
 // @import "codemirror/theme/nord";
 // @import "codemirror/theme/material-palenight";
 // @import "codemirror/theme/night";
+
 @import url("https://fonts.googleapis.com/css2?family=Inter&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field.mat-mdc-form-field
+  .mdc-notched-outline__notch {
+  border-right-style: hidden;
+}
+.mat-mdc-input-element {
+  box-shadow: none !important;
+}
 
 body,
 h1,
@@ -12,4 +25,13 @@ h3,
 h4,
 h5 {
   font-family: "Inter";
+}
+
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
 }

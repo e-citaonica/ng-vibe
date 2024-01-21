@@ -343,7 +343,6 @@ export class DocumentComponent implements AfterViewInit {
 
       this.pendingChangesQueue.dequeue().map((op) => {
         this.socket.emitOperation(op).subscribe(this.ackHandler());
-        // this.transformSelectionsAgainstIncomingOperation(op);
       });
     };
   }
@@ -438,7 +437,6 @@ export class DocumentComponent implements AfterViewInit {
 
           this.pendingChangesQueue.dequeue().map((op) => {
             this.socket.emitOperation(op).subscribe(this.ackHandler());
-            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       } else {
@@ -468,7 +466,6 @@ export class DocumentComponent implements AfterViewInit {
 
           this.pendingChangesQueue.dequeue().map((op) => {
             this.socket.emitOperation(op).subscribe(this.ackHandler());
-            // this.transformSelectionsAgainstIncomingOperation(op);
           });
         }
       }

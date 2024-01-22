@@ -2,8 +2,8 @@ import { Routes } from '@angular/router';
 import { NavigationComponent } from './navigation/navigation.component';
 import { HomeComponent } from './pages/home/home.component';
 import { LoginComponent } from './pages/login/login.component';
-import { DocumentComponent } from './pages/document/document.component';
 import { authGuard } from './guards/auth.guard';
+import { DocumentComponent } from './pages/document/document.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },

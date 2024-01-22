@@ -22,7 +22,7 @@ import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, map, mergeMap, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
-import { Editor } from '../../core/editor';
+import { Editor } from '../../editor/editor';
 
 @Component({
   selector: 'app-document',

@@ -6,7 +6,6 @@ import { AngularMaterialModule } from '../../angular-material.module';
   standalone: true,
   imports: [AngularMaterialModule],
   templateUrl: './document-card.component.html',
-  styleUrl: './document-card.component.scss',
 })
 export class DocumentCardComponent {
   @Input('document') document?: Document;

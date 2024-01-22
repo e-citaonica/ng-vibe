@@ -18,16 +18,16 @@ import {
   highlightActiveLine,
 } from '@codemirror/view';
 import { EditorView, basicSetup } from 'codemirror';
-import {
-  hashStringToColor,
-  userPresenceExtension,
-  cursorTooltipBaseTheme,
-} from '../pages/document/user-selection-widget';
-import { DocumentBuffer } from './document-buffer';
+import { usersCursorsExtension } from './extensions/selection-widget';
+import { DocumentBuffer } from '../core/document-buffer';
 import { Document } from '../model/document.model';
 import { ElementRef, Injector } from '@angular/core';
 import { OperationAck, OperationWrapper, TextSelection } from '../model/models';
 import { Subject } from 'rxjs';
+import {
+  selectionTooltipBaseTheme,
+  selectionTooltipField,
+} from './extensions/selection-tooltip';
 
 export class Editor {
   private view!: EditorView;
@@ -53,51 +53,6 @@ export class Editor {
       update: (value, tr) => this.listenChangesUpdate(value, tr),
     });
 
-    const getCursorTooltips = (): readonly Tooltip[] => {
-      return [...this.documentBuffer.selections().entries()].map(
-        ([username, selection]) => {
-          return {
-            pos: selection.to,
-            above: true,
-            strictSide: true,
-            arrow: true,
-            create: () => {
-              const dom = document.createElement('div');
-              dom.className = 'cm-tooltip-cursor';
-              dom.id = username;
-              dom.style.backgroundColor = hashStringToColor(username);
-              dom.style.color = 'black';
-
-              // setTimeout(() => {
-              //   (
-              //     document.querySelector(
-              //       `#${username} .cm-tooltip-arrow:before`
-              //     ) as any
-              //   ).style.setProperty(
-              //     'border-top',
-              //     `7px solid ${hashStringToColor(username)}`
-              //   );
-              // }, 0);
-
-              dom.textContent = username;
-              return { dom };
-            },
-          };
-        }
-      );
-    };
-
-    const cursorTooltipField = StateField.define<readonly Tooltip[]>({
-      // @ts-ignore
-      create: getCursorTooltips,
-
-      update(tooltips, tr) {
-        return getCursorTooltips();
-      },
-
-      provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
-    });
-
     this.state = EditorState.create({
       doc: doc.content,
       extensions: [
@@ -114,8 +69,12 @@ export class Editor {
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
-        userPresenceExtension(injector, this.documentBuffer.selections),
-        [cursorTooltipBaseTheme, cursorTooltipField],
+        usersCursorsExtension(injector, this.documentBuffer.selections),
+        // TODO: Tooltips on hover
+        // [
+        //   selectionTooltipField(this.documentBuffer.selections),
+        //   selectionTooltipBaseTheme,
+        // ],
       ],
     });
 

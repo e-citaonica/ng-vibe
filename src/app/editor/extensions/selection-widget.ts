@@ -6,30 +6,16 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import { Annotation, RangeSet } from '@codemirror/state';
-import { Observable } from 'rxjs';
 import { TextSelection } from '../../model/models';
 import { Injector, Signal, effect } from '@angular/core';
-
-const h = (str: string): number => {
-  return [...str].reduce((acc, char) => {
-    return char.charCodeAt(0) + ((acc << 5) - acc);
-  }, 0);
-};
-
-export const hashStringToColor = (str: string) => {
-  const stringUniqueHash = h(str);
-
-  const color = `hsl(${Math.abs(stringUniqueHash % 360)}, 85%, 85%)`;
-
-  return color;
-};
+import { hashStringToColor } from '../../core/util/helpers';
 
 const highlight = (username: string) =>
   Decoration.mark({
     attributes: { style: `background-color: ${hashStringToColor(username)}` },
   });
 
-export const userPresenceExtension = (
+export const usersCursorsExtension = (
   injector: Injector,
   selections: Signal<Map<string, TextSelection>>
 ) => [
@@ -46,7 +32,7 @@ export const userPresenceExtension = (
             // Side effect on selection changes.
 
             // Update decorations to reflect new presence state.
-            // TODO: consider mutating this rather than recomputing it on each change.
+            // TODO: Consider mutating this rather than recomputing it on each change.
 
             const selectionValues = [...selections().values()];
 
@@ -59,7 +45,7 @@ export const userPresenceExtension = (
                   value: Decoration.widget({
                     side: -1,
                     block: false,
-                    widget: new UserSelectionWidget(selection.performedBy),
+                    widget: new CursorWidget(selection.performedBy),
                   }),
                 };
               });
@@ -98,17 +84,17 @@ export const userPresenceExtension = (
       decorations: (v) => v.decorations,
     }
   ),
-  userCursorTheme,
+  cursorTheme,
 ];
 
 const presenceAnnotation = Annotation.define();
 
-class UserSelectionWidget extends WidgetType {
+class CursorWidget extends WidgetType {
   constructor(readonly username: string) {
     super();
   }
 
-  override eq(other: UserSelectionWidget): boolean {
+  override eq(other: CursorWidget): boolean {
     return other.username == this.username;
   }
 
@@ -128,24 +114,7 @@ class UserSelectionWidget extends WidgetType {
   }
 }
 
-export const cursorTooltipBaseTheme = EditorView.baseTheme({
-  '.cm-tooltip.cm-tooltip-cursor': {
-    // backgroundColor: '#66b',
-    color: 'white',
-    border: 'none',
-    padding: '2px 7px',
-    borderRadius: '4px',
-    'margin-right': '5px',
-    '& .cm-tooltip-arrow:before': {
-      // borderTopColor: '#66b',
-    },
-    '& .cm-tooltip-arrow:after': {
-      borderTopColor: 'transparent',
-    },
-  },
-});
-
-const userCursorTheme = EditorView.baseTheme({
+const cursorTheme = EditorView.baseTheme({
   '.cm-user-cursor': {
     position: 'relative',
   },

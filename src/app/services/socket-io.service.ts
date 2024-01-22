@@ -25,17 +25,19 @@ export class SocketIoService {
   private disconnect$ = new Subject<void>();
   private connect$ = new Subject<string>();
 
-  public operation$ = new Observable<OperationWrapper>();
-  public selection$ = new Observable<TextSelection>();
-  public userJoin$ = new Observable<UserInfo>();
-  public userLeave$ = new Observable<UserInfo>();
+  public operation$ = new Subject<OperationWrapper>();
+  public selection$ = new Subject<TextSelection>();
+  public userJoin$ = new Subject<UserInfo>();
+  public userLeave$ = new Subject<UserInfo>();
 
-  setupSocketEvent<T>(eventName: SocketEvent, callback?: (data: T) => void) {
-    return new Observable<T>((observer) => {
-      this.socket!.on(eventName, (data: T) => {
-        callback?.(data);
-        observer.next(data);
-      });
+  setupSocketEvent<T>(
+    subject: Subject<T>,
+    eventName: SocketEvent,
+    callback?: (data: T) => void
+  ) {
+    this.socket!.on(eventName, (data: T) => {
+      callback?.(data);
+      subject.next(data);
     });
   }
 
@@ -56,12 +58,12 @@ export class SocketIoService {
       console.log('Socket.IO disconnect reason:', reason);
     });
 
-    this.operation$ = this.setupSocketEvent('operation', (op) => {
+    this.setupSocketEvent(this.operation$, 'operation', (op) => {
       console.log('Socket operation response:', op);
     });
-    this.selection$ = this.setupSocketEvent('selection');
-    this.userJoin$ = this.setupSocketEvent('user_joined_doc');
-    this.userLeave$ = this.setupSocketEvent('user_left_doc');
+    this.setupSocketEvent(this.selection$, 'selection');
+    this.setupSocketEvent(this.userJoin$, 'user_joined_doc');
+    this.setupSocketEvent(this.userLeave$, 'user_left_doc');
 
     return this.connect$;
   }

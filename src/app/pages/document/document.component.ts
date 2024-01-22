@@ -1,7 +1,6 @@
 import {
   OperationAck,
   OperationWrapper,
-  TextOperation,
   TextSelection,
   UserInfo,
 } from '../../model/models';
@@ -37,9 +36,7 @@ import { basicSetup } from 'codemirror';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { transformOperation } from '../../operation-transformations';
 import { SocketIoService } from '../../services/socket-io.document.service';
-import { Constants } from '../../../constants';
 import {
   hashStringToColor,
   cursorTooltipBaseTheme,
@@ -48,7 +45,7 @@ import {
 import { transformSelection } from '../../selection-transformations';
 import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, take, takeUntil } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
 import { Queue } from '../../util/queue';
 import { DocumentBuffer } from './document-buffer';

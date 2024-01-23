@@ -74,7 +74,6 @@ export class SocketIoService {
   ) {
     return new Observable<A>((observer) => {
       this.socket!.emit(event, payload, (ackData: A) => {
-        console.log({ event, payload, ackData });
         observer.next(ackData);
         observer.complete();
       });

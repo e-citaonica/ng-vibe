@@ -1,8 +1,34 @@
-import { EditorView, Tooltip, showTooltip } from '@codemirror/view';
+import {
+  EditorView,
+  Tooltip,
+  hoverTooltip,
+  showTooltip,
+} from '@codemirror/view';
 import { hashStringToColor } from '../../core/util/helpers';
 import { TextSelection } from '../../model/models';
 import { StateField } from '@codemirror/state';
 import { Signal } from '@angular/core';
+
+export const selectionHover = (
+  selections: Signal<Map<string, TextSelection>>
+) =>
+  hoverTooltip((view, pos, side) => {
+    const selectionsInRange = [...selections().values()].filter(
+      (s) => s.from <= pos && s.to >= pos
+    );
+
+    return {
+      pos: pos,
+      above: true,
+      create(view) {
+        let dom = document.createElement('div');
+        dom.textContent = selectionsInRange
+          .map((s) => s.performedBy)
+          .join(', ');
+        return { dom };
+      },
+    };
+  });
 
 export const selectionTooltipField = (
   selections: Signal<Map<string, TextSelection>>
@@ -27,7 +53,7 @@ const getSelectionTooltips = (
       arrow: true,
       create: () => {
         const dom = document.createElement('div');
-        dom.className = 'cm-tooltip-cursor';
+        dom.className = 'cm-tooltip-selection';
         dom.id = username;
         dom.style.backgroundColor = hashStringToColor(username);
         dom.style.color = 'black';
@@ -51,7 +77,7 @@ const getSelectionTooltips = (
 };
 
 export const selectionTooltipBaseTheme = EditorView.baseTheme({
-  '.cm-tooltip.cm-tooltip-cursor': {
+  '.cm-tooltip.cm-tooltip-selection': {
     color: 'white',
     border: 'none',
     padding: '2px 7px',

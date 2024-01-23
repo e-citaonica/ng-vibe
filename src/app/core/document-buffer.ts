@@ -1,4 +1,4 @@
-import { Signal, signal } from '@angular/core';
+import { signal } from '@angular/core';
 import {
   OperationWrapper,
   TextOperation,
@@ -36,19 +36,23 @@ export class DocumentBuffer {
     this._pendingChangesQueue.print();
   }
 
-  transformSelectionsAgainstIncomingOperation(incoming: OperationWrapper) {
-    for (const [username, selection] of this._selections().entries()) {
-      const before = selection;
-      const transformedSelection = transformSelection(
-        selection,
-        incoming.operation
-      );
-      this._selections.update(
-        (selections) => new Map(selections.set(username, transformedSelection))
-      );
-      const after = transformedSelection;
-      console.log({ before, after });
-    }
+  transformSelectionsAgainstIncomingOperation(
+    ...incomingOps: OperationWrapper[]
+  ) {
+    incomingOps.map((incoming) => {
+      for (const [username, selection] of this._selections().entries()) {
+        const before = selection;
+        const transformedSelection = transformSelection(
+          selection,
+          incoming.operation
+        );
+        this._selections.update(
+          (selections) =>
+            new Map(selections.set(username, transformedSelection))
+        );
+        const after = transformedSelection;
+      }
+    });
   }
 
   setSelection(selection: TextSelection) {
@@ -77,7 +81,6 @@ export class DocumentBuffer {
         const mergedOp = this.tryMerge(last.operation, op.operation);
 
         if (mergedOp !== null) {
-          console.log('merge', last, op, mergedOp);
           this._pendingChangesQueue.updateLast({
             ...last,
             operation: mergedOp,

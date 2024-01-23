@@ -20,7 +20,7 @@ import { CommonModule } from '@angular/common';
 import { SocketIoService } from '../../services/socket-io.service';
 import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, map, mergeMap, takeUntil } from 'rxjs';
+import { Subject, map, mergeMap, switchMap, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
 import { Editor } from '../../editor/editor';
 
@@ -62,7 +62,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((payload) => {
         // TODO: Username or socketId?
-        this.editor.documentBuffer.deleteSelection(payload.sessionId);
+        this.editor.documentBuffer.deleteSelection(payload.username);
         // TODO: Something smarter than manual update trigger
         this.editor.viewDispatch();
       });
@@ -70,8 +70,6 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
     this.socketIOService.operation$
       .pipe(takeUntil(this.destroy$))
       .subscribe((incomingOp) => {
-        console.log('Socket operation response:', incomingOp);
-
         this.editor.documentBuffer.transformPendingOperationsAgainstIncomingOperation(
           incomingOp
         );
@@ -115,7 +113,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
     this.editor.operation$
       .pipe(
-        mergeMap((operationWrapper) =>
+        switchMap((operationWrapper) =>
           this.socketIOService.emitWithAck<OperationWrapper, OperationAck>(
             'operation',
             operationWrapper
@@ -124,7 +122,6 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe((ack) => {
-        console.log({ ack });
         this.editor.ackHandler(ack);
       });
   }
@@ -143,7 +140,6 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
         )
       )
       .subscribe(({ socketId, doc }) => {
-        console.log({ socketId, doc });
         this.editor.init(this.cm, doc, this.injector);
 
         this.editor.documentBuffer.doc.set(doc);

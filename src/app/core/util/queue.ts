@@ -112,8 +112,6 @@ export class Queue<T> {
       elements.push(current.data);
       current = current.next;
     }
-
-    console.log('Queue:', elements);
   }
 
   [Symbol.iterator](): Iterator<T> {

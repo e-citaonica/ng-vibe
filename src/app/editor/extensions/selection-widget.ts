@@ -100,10 +100,15 @@ class CursorWidget extends WidgetType {
 
   toDOM() {
     const span = document.createElement('span');
-    span.setAttribute('aria-hidden', 'true');
-    span.className = 'cm-user-cursor';
+    // span.setAttribute('aria-hidden', 'true');
+    span.className = 'vibe-cursor';
     span.style.borderLeft = `3px solid ${hashStringToColor(this.username)}`;
     // span.textContent = this.username;
+
+    const tooltipAbove = document.createElement('div');
+    span.appendChild(tooltipAbove);
+    tooltipAbove.className = 'cm-tooltip-hover vibe-cursor-username';
+    tooltipAbove.textContent = this.username;
 
     span.appendChild(document.createElement('div'));
     return span;
@@ -115,10 +120,14 @@ class CursorWidget extends WidgetType {
 }
 
 const cursorTheme = EditorView.baseTheme({
-  '.cm-user-cursor': {
+  'cm-tooltip-hover': {
+    'user-select': 'none',
+  },
+
+  '.vibe-cursor': {
     position: 'relative',
   },
-  '.cm-user-cursor > div': {
+  '.vibe-cursor > div': {
     position: 'absolute',
     top: '0',
     bottom: '0',
@@ -126,5 +135,14 @@ const cursorTheme = EditorView.baseTheme({
     right: '0',
     // borderLeft: '3px solid #66b',
     //borderRight: '1px solid black',
+  },
+  '.vibe-cursor-username': {
+    opacity: '0',
+    'z-index': '2',
+    background: 'white',
+    'border-radius': '5px',
+  },
+  '.vibe-cursor:hover .vibe-cursor-username': {
+    opacity: '1',
   },
 });

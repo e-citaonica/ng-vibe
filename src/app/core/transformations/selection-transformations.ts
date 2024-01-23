@@ -13,7 +13,6 @@ const transformSI = (
 ): TextSelection => {
   // text inserted before selection
   if (op.position < selection.from) {
-    console.log('text inserted before selection');
     const { from, to } = selection;
     const { length } = op;
     console.log({ from, to, length });
@@ -26,7 +25,6 @@ const transformSI = (
     };
   } // text inserted inside selection => extend right anchor of selection by text length
   else if (op.position >= selection.from && op.position < selection.to) {
-    console.log('text inserted inside selection');
     return {
       docId: selection.docId,
       revision: selection.revision,
@@ -45,7 +43,6 @@ const transformSD = (
 
   // delete starts and ends before selection
   if (opEnd <= selection.from) {
-    console.log('delete starts and ends before selection');
     return {
       docId: selection.docId,
       revision: selection.revision,
@@ -60,9 +57,6 @@ const transformSD = (
     opEnd > selection.from &&
     opEnd < selection.to
   ) {
-    console.log(
-      'delete starts before selection and ends in the middle of selection'
-    );
     const overlapFromStartOfSelection = selection.from - op.position;
     return {
       docId: selection.docId,
@@ -74,8 +68,6 @@ const transformSD = (
   }
   // delete is inside of selection
   else if (op.position >= selection.from && op.position < selection.to) {
-    console.log('delete is inside of selection');
-
     const toCut = Math.min(op.length, selection.to - op.position);
 
     return {

@@ -25,9 +25,11 @@ import { ElementRef, Injector } from '@angular/core';
 import { OperationAck, OperationWrapper, TextSelection } from '../model/models';
 import { Subject } from 'rxjs';
 import {
+  selectionHover,
   selectionTooltipBaseTheme,
   selectionTooltipField,
-} from './extensions/selection-tooltip';
+} from './extensions/selection-hover-tooltip';
+import { findFirstWholeWordFromLeft } from '../core/util/helpers';
 
 export class Editor {
   private view!: EditorView;
@@ -62,7 +64,8 @@ export class Editor {
         highlightSpecialChars(),
         drawSelection(),
         dropCursor(),
-        EditorState.allowMultipleSelections.of(true),
+        // TODO: Multiple selections
+        // EditorState.allowMultipleSelections.of(true),
         rectangularSelection(),
         crosshairCursor(),
         highlightActiveLine(),
@@ -70,6 +73,7 @@ export class Editor {
         lineNumbers(),
         this.listenChangesExtension,
         usersCursorsExtension(injector, this.documentBuffer.selections),
+        selectionHover(this.documentBuffer.selections),
         // TODO: Tooltips on hover
         // [
         //   selectionTooltipField(this.documentBuffer.selections),
@@ -86,13 +90,8 @@ export class Editor {
 
   listenChangesUpdate(value: number, transaction: Transaction) {
     const selectionRange = transaction.startState.selection.main;
-    const annotation = (transaction as any).annotations[0].value as string;
 
-    if (
-      !transaction.docChanged &&
-      typeof annotation === 'string' &&
-      annotation.startsWith('select')
-    ) {
+    if (!transaction.docChanged && transaction.isUserEvent('select')) {
       const range = transaction.selection!.main;
 
       this.selection$.next({
@@ -102,33 +101,37 @@ export class Editor {
         from: range.from,
         to: range.to,
       });
+
+      return value + 1;
     }
 
     if (transaction.docChanged) {
-      if (typeof annotation !== 'string') {
-        return value;
-      }
-
-      const text: string | undefined = (transaction.changes as any).inserted
+      let text: string | undefined = (transaction.changes as any).inserted
         .find((i: any) => i.length > 0)
         ?.text?.join('\n');
 
-      const type = annotation.startsWith('input') ? 'insert' : 'delete';
+      // ...
+      const type = text
+        ? 'insert'
+        : transaction.isUserEvent('input')
+        ? 'insert'
+        : 'delete';
 
-      const lengthDiff =
-        transaction.changes.desc.newLength - transaction.changes.desc.length;
+      if (transaction.isUserEvent('input.complete')) {
+        const partialWord = findFirstWholeWordFromLeft(
+          text!,
+          selectionRange.from
+        );
 
-      console.log({
-        transaction,
-        changes: transaction.changes,
-        selectionRange,
-        annotation,
-        text,
-      });
+        text = text!.substring(partialWord.length);
+      }
 
-      let position = 0;
+      let position;
 
-      if (annotation === 'delete.backward') {
+      if (transaction.isUserEvent('delete.backward')) {
+        const lengthDiff =
+          transaction.changes.desc.newLength - transaction.changes.desc.length;
+
         position = selectionRange.from - Math.abs(lengthDiff);
       } else {
         position = selectionRange.from;
@@ -136,7 +139,7 @@ export class Editor {
 
       // Paste & replace selection
       if (
-        annotation === 'input.paste' &&
+        transaction.isUserEvent('input.paste') &&
         selectionRange.to - selectionRange.from > 0
       ) {
         const opDelete: OperationWrapper = {
@@ -163,21 +166,11 @@ export class Editor {
           },
         };
 
-        console.log({ opDelete, opInsert });
-
         this.documentBuffer.enqueue(opDelete, opInsert);
         this.documentBuffer.transformSelectionsAgainstIncomingOperation(
-          opDelete
-        );
-        this.documentBuffer.transformSelectionsAgainstIncomingOperation(
+          opDelete,
           opInsert
         );
-
-        if (!this.startedSendingEvents) {
-          this.startedSendingEvents = true;
-
-          this.operation$.next(this.documentBuffer.dequeue());
-        }
       } else {
         const operation: OperationWrapper = {
           docId: this.documentBuffer.doc().id,
@@ -194,19 +187,18 @@ export class Editor {
               ),
           },
         };
+        console.log(operation);
 
         this.documentBuffer.enqueue(operation);
         this.documentBuffer.transformSelectionsAgainstIncomingOperation(
           operation
         );
+      }
 
-        console.log({ operation });
+      if (!this.startedSendingEvents) {
+        this.startedSendingEvents = true;
 
-        if (!this.startedSendingEvents) {
-          this.startedSendingEvents = true;
-
-          this.operation$.next(this.documentBuffer.dequeue());
-        }
+        this.operation$.next(this.documentBuffer.dequeue());
       }
     }
 
@@ -214,8 +206,6 @@ export class Editor {
   }
 
   ackHandler(ackRevision: OperationAck) {
-    console.log('Acknowledgment from server:', ackRevision);
-
     this.documentBuffer.doc.update((doc) => ({
       ...doc,
       revision: ackRevision.revision,

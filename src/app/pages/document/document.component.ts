@@ -20,7 +20,7 @@ import { CommonModule } from '@angular/common';
 import { SocketIoService } from '../../services/socket-io.service';
 import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, map, mergeMap, switchMap, takeUntil } from 'rxjs';
+import { Subject, map, mergeMap, switchMap, take, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
 import { Editor } from '../../editor/editor';
 
@@ -102,6 +102,19 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           panelClass: ['green-snackbar'],
         });
       });
+
+    this.socketIOService.userLeave$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((payload) => {
+        this.snackbar.open(`${payload.username} left!`, 'Info', {
+          horizontalPosition: 'center',
+          verticalPosition: 'top',
+          duration: 3000,
+          panelClass: ['green-snackbar'],
+        });
+
+        this.editor.documentBuffer.deleteSelection(payload.sessionId);
+      });
   }
 
   subscribeToEditorEvents() {
@@ -113,13 +126,13 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
     this.editor.operation$
       .pipe(
+        takeUntil(this.destroy$),
         switchMap((operationWrapper) =>
           this.socketIOService.emitWithAck<OperationWrapper, OperationAck>(
             'operation',
             operationWrapper
           )
-        ),
-        takeUntil(this.destroy$)
+        )
       )
       .subscribe((ack) => {
         this.editor.ackHandler(ack);
@@ -133,29 +146,13 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .connect(id)
       .pipe(
         mergeMap((socketId) =>
-          this.documentService.get(id).pipe(
-            map((doc) => ({ socketId, doc })),
-            takeUntil(this.destroy$)
-          )
+          this.documentService.get(id).pipe(map((doc) => ({ socketId, doc })))
         )
       )
+      .pipe(take(1))
       .subscribe(({ socketId, doc }) => {
         this.editor.init(this.cm, doc, this.injector);
-
         this.editor.documentBuffer.doc.set(doc);
-
-        this.socketIOService.userLeave$
-          .pipe(takeUntil(this.destroy$))
-          .subscribe((payload) => {
-            this.snackbar.open(`${payload.username} left!`, 'Info', {
-              horizontalPosition: 'center',
-              verticalPosition: 'top',
-              duration: 3000,
-              panelClass: ['green-snackbar'],
-            });
-
-            this.editor.documentBuffer.deleteSelection(socketId);
-          });
       });
   }
 
@@ -165,6 +162,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
   }
 
   applyOperation(incomingOp: OperationWrapper) {
+    console.log(incomingOp);
     this.editor.documentBuffer.applyOperation(incomingOp);
 
     if (incomingOp.operation.type === 'insert') {
@@ -174,13 +172,13 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           insert: incomingOp.operation.operand!,
         },
       });
-    } else {
-      this.editor.viewDispatch({
-        changes: {
-          from: incomingOp.operation.position,
-          to: incomingOp.operation.position + incomingOp.operation.length,
-        },
-      });
-    }
+    } //else {
+    //   this.editor.viewDispatch({
+    //     changes: {
+    //       from: incomingOp.operation.position,
+    //       to: incomingOp.operation.position + incomingOp.operation.length,
+    //     },
+    //   });
+    // }
   }
 }

@@ -6,8 +6,6 @@ import {
   TransactionSpec,
 } from '@codemirror/state';
 import {
-  Tooltip,
-  showTooltip,
   lineNumbers,
   highlightActiveLineGutter,
   highlightSpecialChars,
@@ -30,6 +28,12 @@ import {
   selectionTooltipField,
 } from './extensions/selection-hover-tooltip';
 import { findFirstWholeWordFromLeft } from '../core/util/helpers';
+import {
+  EventSubtype,
+  EventType,
+  eventSubtypes,
+  eventTypes,
+} from './model/event.type';
 
 export class Editor {
   private view!: EditorView;
@@ -52,7 +56,10 @@ export class Editor {
 
     this.listenChangesExtension = StateField.define({
       create: () => 0,
-      update: (value, tr) => this.listenChangesUpdate(value, tr),
+      update: (value, tr) => {
+        this.listenChangesUpdate(value, tr);
+        return value + 1;
+      },
     });
 
     this.state = EditorState.create({
@@ -88,10 +95,28 @@ export class Editor {
     });
   }
 
+  getEventType(
+    transaction: Transaction
+  ):
+    | { origin: 'dispatch'; type?: undefined; subtype?: undefined }
+    | { origin: 'user'; type: EventType; subtype?: EventSubtype } {
+    const type = eventTypes.find((t) => transaction.isUserEvent(t));
+    if (!type) return { origin: 'dispatch' };
+
+    return {
+      origin: 'user',
+      type,
+      subtype: eventSubtypes.find((t) => transaction.isUserEvent(t)),
+    };
+  }
+
   listenChangesUpdate(value: number, transaction: Transaction) {
+    const { origin, type, subtype } = this.getEventType(transaction);
+    if (origin === 'dispatch') return;
+
     const selectionRange = transaction.startState.selection.main;
 
-    if (!transaction.docChanged && transaction.isUserEvent('select')) {
+    if (!transaction.docChanged && type === 'select') {
       const range = transaction.selection!.main;
 
       this.selection$.next({
@@ -102,14 +127,14 @@ export class Editor {
         to: range.to,
       });
 
-      return value + 1;
+      return;
     }
 
     if (transaction.docChanged) {
       let text: string | undefined = (transaction.changes as any).inserted
         .find((i: any) => i.length > 0)
         ?.text?.join('\n');
-
+      console.log(text);
       // ...
       const type = text
         ? 'insert'
@@ -118,6 +143,7 @@ export class Editor {
         : 'delete';
 
       if (transaction.isUserEvent('input.complete')) {
+        console.log('completeee');
         const partialWord = findFirstWholeWordFromLeft(
           text!,
           selectionRange.from
@@ -202,7 +228,7 @@ export class Editor {
       }
     }
 
-    return value + 1;
+    return;
   }
 
   ackHandler(ackRevision: OperationAck) {

@@ -172,9 +172,8 @@ export class Editor {
           transaction.changes.desc.newLength - transaction.changes.desc.length;
         let position = selectionRange.from;
         if (subtype === 'delete.backward') {
-          position -= Math.abs(length);
+          position += length;
         }
-
         this.operation$.next({
           length: Math.abs(length),
           operand: null,
@@ -184,10 +183,10 @@ export class Editor {
         break;
       case 'input':
         subtype = subtype as EventSubtype<typeof type>;
+
         let insertedText = '';
         transaction.changes.iterChanges(
           (_fromA, _toA, _fromB, _toB, inserted) => {
-            console.log(_fromA, _toA, _fromB, _toB, inserted);
             insertedText = insertedText.concat(inserted.toString());
           }
         );
@@ -222,10 +221,12 @@ export class Editor {
             insertedText = '';
             transaction.changes.iterChanges(
               (_fromA, _toA, _fromB, _toB, inserted) => {
-                const completed = inserted.toString().substring(_toA - _fromA);
-                insertedText = insertedText.concat(completed);
+                insertedText = insertedText.concat(
+                  inserted.toString().substring(_toA - _fromA)
+                );
               }
             );
+
             this.operation$.next({
               type: 'insert',
               operand: insertedText,

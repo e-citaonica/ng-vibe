@@ -3,6 +3,7 @@ import {
   Annotation,
   AnnotationType,
   EditorState,
+  Prec,
   StateField,
   Transaction,
   TransactionSpec,
@@ -16,6 +17,8 @@ import {
   rectangularSelection,
   crosshairCursor,
   highlightActiveLine,
+  keymap,
+  ViewPlugin,
 } from '@codemirror/view';
 import { EditorView, basicSetup } from 'codemirror';
 import { usersCursorsExtension } from './extensions/selection-widget';
@@ -43,13 +46,19 @@ import {
   eventTypeMap,
   eventTypes,
 } from './model/event.type';
+import {
+  indentMore,
+  insertBlankLine,
+  insertNewline,
+  lineComment,
+} from '@codemirror/commands';
 
 export class Editor {
   private view!: EditorView;
   private state!: EditorState;
   private listenChangesExtension!: StateField<number>;
 
-  private isDequing = false;
+  private isDequeing = false;
 
   readonly documentState = new DocumentState();
 
@@ -60,7 +69,7 @@ export class Editor {
   private onDispose$ = new Subject<void>();
 
   viewDispatch(...specs: TransactionSpec[]) {
-    this.view.dispatch(...specs);
+    this.view?.dispatch(...specs);
   }
 
   init(cm: ElementRef<HTMLDivElement>, doc: Document, injector: Injector) {
@@ -70,7 +79,7 @@ export class Editor {
       create: () => 0,
       update: (value, tr) => {
         this.listenChangesUpdate(value, tr);
-        return value + 1;
+        return value + 5;
       },
     });
 
@@ -93,6 +102,14 @@ export class Editor {
         this.listenChangesExtension,
         usersCursorsExtension(injector, this.documentState.selections),
         selectionHover(this.documentState.selections),
+        Prec.highest(
+          keymap.of([
+            {
+              key: 'Tab',
+              run: indentMore,
+            },
+          ])
+        ),
         // TODO: Tooltips on hover
         // [
         //   selectionTooltipField(this.documentBuffer.selections),
@@ -102,7 +119,6 @@ export class Editor {
     });
 
     this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
-      console.log('enquing', operation);
       this.documentState.enqueue({
         docId: this.documentState.doc().id,
         revision: this.documentState.doc().revision,
@@ -110,8 +126,10 @@ export class Editor {
         operation,
       });
 
-      if (!this.isDequing) {
-        this.isDequing = true;
+      this.documentState.transformSelectionsAgainstIncomingOperation(operation);
+
+      if (!this.isDequeing) {
+        this.isDequeing = true;
         this.dequeuedOperation$.next(this.documentState.dequeue());
       }
     });
@@ -151,18 +169,22 @@ export class Editor {
     if (origin === 'dispatch') {
       return;
     }
-
-    const selectionRange = transaction.startState.selection.main;
+    let insertedText = '';
+    transaction.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+      insertedText = insertedText.concat(inserted.toString());
+    });
+    const { from, to } = transaction.startState.selection.main;
 
     switch (type) {
       case 'select':
+        console.log('select');
         const range = transaction.selection!.main;
         this.selection$.next({
           docId: this.documentState.doc().id,
           revision: this.documentState.doc().revision,
           performedBy: localStorage.getItem('user')!,
-          from: range.from,
-          to: range.to,
+          from: from,
+          to: to,
         });
         break;
       case 'delete':
@@ -170,7 +192,7 @@ export class Editor {
 
         const length =
           transaction.changes.desc.newLength - transaction.changes.desc.length;
-        let position = selectionRange.from;
+        let position = from;
         if (subtype === 'delete.backward') {
           position += length;
         }
@@ -195,25 +217,26 @@ export class Editor {
           case 'input.type':
             this.operation$.next({
               type: 'insert',
-              position: selectionRange.from,
+              position: from,
               operand: insertedText,
               length: insertedText.length,
             });
             break;
           case 'input.paste':
-            const overLen = selectionRange.to - selectionRange.from;
+            const overLen = to - from;
+            console.log('input.pase', overLen);
             if (overLen > 0) {
               this.operation$.next({
                 type: 'delete',
                 operand: null,
-                position: selectionRange.from,
+                position: from,
                 length: overLen,
               });
             }
             this.operation$.next({
               type: 'insert',
               operand: insertedText!,
-              position: selectionRange.from,
+              position: from,
               length: insertedText.length,
             });
             break;
@@ -231,13 +254,25 @@ export class Editor {
               type: 'insert',
               operand: insertedText,
               length: insertedText.length,
-              position: selectionRange.from,
+              position: from,
             });
             break;
           default:
+            const {
+              startState: { doc },
+            } = transaction;
+            const lineFrom = doc.lineAt(from);
+            const lineTo = doc.lineAt(to);
+
+            let position = from;
+            if (lineFrom !== lineTo && !lineFrom.text.trim().length) {
+              position = lineFrom.from;
+              insertedText = '\n';
+            }
+
             this.operation$.next({
               type: 'insert',
-              position: selectionRange.from,
+              position: position,
               operand: insertedText,
               length: insertedText.length,
             });
@@ -257,7 +292,7 @@ export class Editor {
     }));
 
     if (!this.documentState.hasPending()) {
-      this.isDequing = false;
+      this.isDequeing = false;
       return;
     }
 

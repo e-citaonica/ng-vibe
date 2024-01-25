@@ -24,28 +24,22 @@ export class DocumentState {
     return this._selections.asReadonly();
   }
 
-  transformPendingOperationsAgainstIncomingOperation(
-    incoming: OperationWrapper
-  ) {
+  transformPendingOperationsAgainstIncomingOperation(incoming: TextOperation) {
     this._pendingChangesQueue.print();
     this._pendingChangesQueue.flatMap((value) => {
-      return transformOperation(value.operation, incoming.operation).map(
-        (op) => ({ ...value, op })
-      );
+      return transformOperation(value.operation, incoming).map((op) => ({
+        ...value,
+        op,
+      }));
     });
     this._pendingChangesQueue.print();
   }
 
-  transformSelectionsAgainstIncomingOperation(
-    ...incomingOps: OperationWrapper[]
-  ) {
+  transformSelectionsAgainstIncomingOperation(...incomingOps: TextOperation[]) {
     incomingOps.map((incoming) => {
       for (const [username, selection] of this._selections().entries()) {
         const before = selection;
-        const transformedSelection = transformSelection(
-          selection,
-          incoming.operation
-        );
+        const transformedSelection = transformSelection(selection, incoming);
         this._selections.update(
           (selections) =>
             new Map(selections.set(username, transformedSelection))
@@ -78,7 +72,9 @@ export class DocumentState {
     for (const op of ops) {
       if (this._pendingChangesQueue.isNotEmpty()) {
         const last = this._pendingChangesQueue.peekLast();
-        const mergedOp = this.tryMerge(last.operation, op.operation);
+        const mergedOp =
+          this.tryMerge(last.operation, op.operation) ??
+          this.tryMerge(op.operation, last.operation);
 
         if (mergedOp !== null) {
           this._pendingChangesQueue.updateLast({

@@ -56,7 +56,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .subscribe((selection) => {
         this.editor.documentState.setSelection(selection);
         // TODO: Something smarter than manual update trigger
-        this.editor.viewDispatch();
+        this.editor?.viewDispatch();
       });
 
     this.socketIOService.userLeave$
@@ -72,10 +72,10 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((incomingOp) => {
         this.editor.documentState.transformPendingOperationsAgainstIncomingOperation(
-          incomingOp
+          incomingOp.operation
         );
         this.editor.documentState.transformSelectionsAgainstIncomingOperation(
-          incomingOp
+          incomingOp.operation
         );
         this.editor.viewDispatch();
 

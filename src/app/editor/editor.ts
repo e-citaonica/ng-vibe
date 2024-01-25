@@ -149,6 +149,12 @@ export class Editor {
           selectionRange.from
         );
 
+        console.log({
+          text,
+          partialWord,
+          substr: text!.substring(partialWord.length),
+        });
+
         text = text!.substring(partialWord.length);
       }
 

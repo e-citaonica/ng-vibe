@@ -16,19 +16,9 @@ export const findFirstWholeWordFromLeft = (
   input: string,
   right: number
 ): string => {
-  if (right < 0 || right >= input.length) {
-    throw new Error('Index for string out of bounds');
-  }
-
-  let left = right;
+  let left = right - 1;
 
   while (left >= 0 && !/^[A-Z]$/i.test(input[left])) {
-    left--;
-  }
-
-  right = left + 1;
-
-  while (left >= 0 && /^[A-Z]$/i.test(input[left])) {
     left--;
   }
 

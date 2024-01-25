@@ -5,10 +5,10 @@
       Leave
     </button>
     <h1>
-      {{ editor.documentBuffer.doc().name }}
+      {{ editor.documentState.doc().name }}
     </h1>
   </div>
-  <h3>Revision: {{ editor.documentBuffer.doc().revision }}</h3>
+  <h3>Revision: {{ editor.documentState.doc().revision }}</h3>
 
   <div #codeMirror class="shadow-sm"></div>
 </div>

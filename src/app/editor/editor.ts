@@ -1,5 +1,7 @@
 import { javascript } from '@codemirror/lang-javascript';
 import {
+  Annotation,
+  AnnotationType,
   EditorState,
   StateField,
   Transaction,
@@ -17,11 +19,16 @@ import {
 } from '@codemirror/view';
 import { EditorView, basicSetup } from 'codemirror';
 import { usersCursorsExtension } from './extensions/selection-widget';
-import { DocumentBuffer } from '../core/document-buffer';
+import { DocumentState } from './document-state';
 import { Document } from '../model/document.model';
 import { ElementRef, Injector } from '@angular/core';
-import { OperationAck, OperationWrapper, TextSelection } from '../model/models';
-import { Subject } from 'rxjs';
+import {
+  OperationAck,
+  OperationWrapper,
+  TextOperation,
+  TextSelection,
+} from '../model/models';
+import { Subject, takeUntil } from 'rxjs';
 import {
   selectionHover,
   selectionTooltipBaseTheme,
@@ -29,9 +36,11 @@ import {
 } from './extensions/selection-hover-tooltip';
 import { findFirstWholeWordFromLeft } from '../core/util/helpers';
 import {
+  EventDescriptor,
   EventSubtype,
   EventType,
   eventSubtypes,
+  eventTypeMap,
   eventTypes,
 } from './model/event.type';
 
@@ -40,19 +49,22 @@ export class Editor {
   private state!: EditorState;
   private listenChangesExtension!: StateField<number>;
 
-  private startedSendingEvents = false;
+  private isDequing = false;
 
-  readonly documentBuffer = new DocumentBuffer();
+  readonly documentState = new DocumentState();
 
   selection$ = new Subject<TextSelection>();
-  operation$ = new Subject<OperationWrapper>();
+  dequeuedOperation$ = new Subject<OperationWrapper>();
+
+  private operation$ = new Subject<TextOperation>();
+  private onDispose$ = new Subject<void>();
 
   viewDispatch(...specs: TransactionSpec[]) {
     this.view.dispatch(...specs);
   }
 
   init(cm: ElementRef<HTMLDivElement>, doc: Document, injector: Injector) {
-    this.documentBuffer.doc.set(doc);
+    this.documentState.doc.set(doc);
 
     this.listenChangesExtension = StateField.define({
       create: () => 0,
@@ -79,8 +91,8 @@ export class Editor {
         javascript({ typescript: true }),
         lineNumbers(),
         this.listenChangesExtension,
-        usersCursorsExtension(injector, this.documentBuffer.selections),
-        selectionHover(this.documentBuffer.selections),
+        usersCursorsExtension(injector, this.documentState.selections),
+        selectionHover(this.documentState.selections),
         // TODO: Tooltips on hover
         // [
         //   selectionTooltipField(this.documentBuffer.selections),
@@ -89,164 +101,165 @@ export class Editor {
       ],
     });
 
+    this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
+      console.log('enquing', operation);
+      this.documentState.enqueue({
+        docId: this.documentState.doc().id,
+        revision: this.documentState.doc().revision,
+        performedBy: localStorage.getItem('user')!,
+        operation,
+      });
+
+      if (!this.isDequing) {
+        this.isDequing = true;
+        this.dequeuedOperation$.next(this.documentState.dequeue());
+      }
+    });
+
     this.view = new EditorView({
       state: this.state,
       parent: cm.nativeElement,
     });
   }
 
-  getEventType(
-    transaction: Transaction
-  ):
-    | { origin: 'dispatch'; type?: undefined; subtype?: undefined }
-    | { origin: 'user'; type: EventType; subtype?: EventSubtype } {
+  dispose() {
+    this.onDispose$.next();
+    this.onDispose$.complete();
+  }
+
+  getEventType(transaction: Transaction): EventDescriptor {
     const type = eventTypes.find((t) => transaction.isUserEvent(t));
-    if (!type) return { origin: 'dispatch' };
+
+    if (!type) {
+      const fallback = (transaction as any).annotations.find(
+        (annotation: any) => annotation.value.type === 'keyword'
+      );
+      return fallback
+        ? { origin: 'user', type: 'input', subtype: 'input.complete' }
+        : { origin: 'dispatch' };
+    }
 
     return {
       origin: 'user',
       type,
-      subtype: eventSubtypes.find((t) => transaction.isUserEvent(t)),
+      subtype: eventTypeMap[type].find((t) => transaction.isUserEvent(t)),
     };
   }
 
   listenChangesUpdate(value: number, transaction: Transaction) {
-    const { origin, type, subtype } = this.getEventType(transaction);
-    if (origin === 'dispatch') return;
-
-    const selectionRange = transaction.startState.selection.main;
-
-    if (!transaction.docChanged && type === 'select') {
-      const range = transaction.selection!.main;
-
-      this.selection$.next({
-        docId: this.documentBuffer.doc().id,
-        revision: this.documentBuffer.doc().revision,
-        performedBy: localStorage.getItem('user')!,
-        from: range.from,
-        to: range.to,
-      });
-
+    let { origin, type, subtype } = this.getEventType(transaction);
+    if (origin === 'dispatch') {
       return;
     }
 
-    if (transaction.docChanged) {
-      let text: string | undefined = (transaction.changes as any).inserted
-        .find((i: any) => i.length > 0)
-        ?.text?.join('\n');
-      console.log(text);
-      // ...
-      const type = text
-        ? 'insert'
-        : transaction.isUserEvent('input')
-        ? 'insert'
-        : 'delete';
+    const selectionRange = transaction.startState.selection.main;
 
-      if (transaction.isUserEvent('input.complete')) {
-        console.log('completeee');
-        const partialWord = findFirstWholeWordFromLeft(
-          text!,
-          selectionRange.from
-        );
+    switch (type) {
+      case 'select':
+        const range = transaction.selection!.main;
+        this.selection$.next({
+          docId: this.documentState.doc().id,
+          revision: this.documentState.doc().revision,
+          performedBy: localStorage.getItem('user')!,
+          from: range.from,
+          to: range.to,
+        });
+        break;
+      case 'delete':
+        subtype = subtype as EventSubtype<typeof type>;
 
-        text = text!.substring(partialWord.length);
-      }
-
-      let position;
-
-      if (transaction.isUserEvent('delete.backward')) {
-        const lengthDiff =
+        const length =
           transaction.changes.desc.newLength - transaction.changes.desc.length;
+        let position = selectionRange.from;
+        if (subtype === 'delete.backward') {
+          position -= Math.abs(length);
+        }
 
-        position = selectionRange.from - Math.abs(lengthDiff);
-      } else {
-        position = selectionRange.from;
-      }
-
-      // Paste & replace selection
-      if (
-        transaction.isUserEvent('input.paste') &&
-        selectionRange.to - selectionRange.from > 0
-      ) {
-        const opDelete: OperationWrapper = {
-          docId: this.documentBuffer.doc().id,
-          revision: this.documentBuffer.doc().revision,
-          performedBy: localStorage.getItem('user')!,
-          operation: {
-            type: 'delete',
-            operand: null,
-            position: selectionRange.from,
-            length: selectionRange.to - selectionRange.from + 1,
-          },
-        };
-
-        const opInsert: OperationWrapper = {
-          docId: this.documentBuffer.doc().id,
-          revision: this.documentBuffer.doc().revision,
-          performedBy: localStorage.getItem('user')!,
-          operation: {
-            type: 'insert',
-            operand: text!,
-            position: selectionRange.from,
-            length: text!.length,
-          },
-        };
-
-        this.documentBuffer.enqueue(opDelete, opInsert);
-        this.documentBuffer.transformSelectionsAgainstIncomingOperation(
-          opDelete,
-          opInsert
+        this.operation$.next({
+          length: Math.abs(length),
+          operand: null,
+          position: position,
+          type: 'delete',
+        });
+        break;
+      case 'input':
+        subtype = subtype as EventSubtype<typeof type>;
+        let insertedText = '';
+        transaction.changes.iterChanges(
+          (_fromA, _toA, _fromB, _toB, inserted) => {
+            console.log(_fromA, _toA, _fromB, _toB, inserted);
+            insertedText = insertedText.concat(inserted.toString());
+          }
         );
-      } else {
-        const operation: OperationWrapper = {
-          docId: this.documentBuffer.doc().id,
-          revision: this.documentBuffer.doc().revision,
-          performedBy: localStorage.getItem('user')!,
-          operation: {
-            type: type,
-            operand: text ?? null,
-            position: position,
-            length:
-              text?.length ??
-              Math.abs(
-                transaction.changes.length - transaction.changes.newLength
-              ),
-          },
-        };
-        console.log(operation);
 
-        this.documentBuffer.enqueue(operation);
-        this.documentBuffer.transformSelectionsAgainstIncomingOperation(
-          operation
-        );
-      }
-
-      if (!this.startedSendingEvents) {
-        this.startedSendingEvents = true;
-
-        this.operation$.next(this.documentBuffer.dequeue());
-      }
+        switch (subtype) {
+          case 'input.type':
+            this.operation$.next({
+              type: 'insert',
+              position: selectionRange.from,
+              operand: insertedText,
+              length: insertedText.length,
+            });
+            break;
+          case 'input.paste':
+            const overLen = selectionRange.to - selectionRange.from;
+            if (overLen > 0) {
+              this.operation$.next({
+                type: 'delete',
+                operand: null,
+                position: selectionRange.from,
+                length: overLen,
+              });
+            }
+            this.operation$.next({
+              type: 'insert',
+              operand: insertedText!,
+              position: selectionRange.from,
+              length: insertedText.length,
+            });
+            break;
+          case 'input.complete':
+            insertedText = '';
+            transaction.changes.iterChanges(
+              (_fromA, _toA, _fromB, _toB, inserted) => {
+                const completed = inserted.toString().substring(_toA - _fromA);
+                insertedText = insertedText.concat(completed);
+              }
+            );
+            this.operation$.next({
+              type: 'insert',
+              operand: insertedText,
+              length: insertedText.length,
+              position: selectionRange.from,
+            });
+            break;
+          default:
+            this.operation$.next({
+              type: 'insert',
+              position: selectionRange.from,
+              operand: insertedText,
+              length: insertedText.length,
+            });
+        }
     }
-
-    return;
   }
 
   ackHandler(ackRevision: OperationAck) {
-    this.documentBuffer.doc.update((doc) => ({
+    this.documentState.doc.update((doc) => ({
       ...doc,
       revision: ackRevision.revision,
     }));
 
-    this.documentBuffer.updatePendingOperations((value) => ({
+    this.documentState.updatePendingOperations((value) => ({
       ...value,
       revision: ackRevision.revision,
     }));
 
-    if (!this.documentBuffer.hasPending()) {
-      this.startedSendingEvents = false;
+    if (!this.documentState.hasPending()) {
+      this.isDequing = false;
       return;
     }
 
-    this.operation$.next(this.documentBuffer.dequeue());
+    this.dequeuedOperation$.next(this.documentState.dequeue());
   }
 }

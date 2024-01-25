@@ -4,12 +4,12 @@ import {
   TextOperation,
   TextSelection,
 } from '../model/models';
-import { transformOperation } from './transformations/operation-transformations';
-import { transformSelection } from './transformations/selection-transformations';
-import { Queue } from './util/queue';
 import { Document } from '../model/document.model';
+import { transformOperation } from '../core/transformations/operation-transformations';
+import { Queue } from '../core/util/queue';
+import { transformSelection } from '../core/transformations/selection-transformations';
 
-export class DocumentBuffer {
+export class DocumentState {
   private _pendingChangesQueue = new Queue<OperationWrapper>();
   private _selections = signal(new Map<string, TextSelection>());
 

@@ -23,6 +23,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, map, mergeMap, switchMap, take, takeUntil } from 'rxjs';
 import { AngularMaterialModule } from '../../angular-material.module';
 import { Editor } from '../../editor/editor';
+import { AnnotationType } from '@codemirror/state';
 
 @Component({
   selector: 'app-document',
@@ -53,7 +54,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
     this.socketIOService.selection$
       .pipe(takeUntil(this.destroy$))
       .subscribe((selection) => {
-        this.editor.documentBuffer.setSelection(selection);
+        this.editor.documentState.setSelection(selection);
         // TODO: Something smarter than manual update trigger
         this.editor.viewDispatch();
       });
@@ -62,7 +63,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((payload) => {
         // TODO: Username or socketId?
-        this.editor.documentBuffer.deleteSelection(payload.username);
+        this.editor.documentState.deleteSelection(payload.username);
         // TODO: Something smarter than manual update trigger
         this.editor.viewDispatch();
       });
@@ -70,15 +71,15 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
     this.socketIOService.operation$
       .pipe(takeUntil(this.destroy$))
       .subscribe((incomingOp) => {
-        this.editor.documentBuffer.transformPendingOperationsAgainstIncomingOperation(
+        this.editor.documentState.transformPendingOperationsAgainstIncomingOperation(
           incomingOp
         );
-        this.editor.documentBuffer.transformSelectionsAgainstIncomingOperation(
+        this.editor.documentState.transformSelectionsAgainstIncomingOperation(
           incomingOp
         );
         this.editor.viewDispatch();
 
-        this.editor.documentBuffer.doc.update((doc) => ({
+        this.editor.documentState.doc.update((doc) => ({
           ...doc,
           revision: incomingOp.revision,
         }));
@@ -89,7 +90,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
     this.socketIOService.selection$
       .pipe(takeUntil(this.destroy$))
       .subscribe((selection) => {
-        this.editor.documentBuffer.setSelection(selection);
+        this.editor.documentState.setSelection(selection);
       });
 
     this.socketIOService.userJoin$
@@ -113,7 +114,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           panelClass: ['green-snackbar'],
         });
 
-        this.editor.documentBuffer.deleteSelection(payload.sessionId);
+        this.editor.documentState.deleteSelection(payload.sessionId);
       });
   }
 
@@ -124,7 +125,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
         this.socketIOService.emit<TextSelection>('selection', selection);
       });
 
-    this.editor.operation$
+    this.editor.dequeuedOperation$
       .pipe(
         takeUntil(this.destroy$),
         switchMap((operationWrapper) =>
@@ -135,6 +136,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
         )
       )
       .subscribe((ack) => {
+        console.log(ack);
         this.editor.ackHandler(ack);
       });
   }
@@ -152,18 +154,19 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(take(1))
       .subscribe(({ socketId, doc }) => {
         this.editor.init(this.cm, doc, this.injector);
-        this.editor.documentBuffer.doc.set(doc);
+        this.editor.documentState.doc.set(doc);
       });
   }
 
   ngOnDestroy(): void {
+    this.editor.dispose();
     this.destroy$.next();
     this.socketIOService.disconnect();
   }
 
   applyOperation(incomingOp: OperationWrapper) {
     console.log(incomingOp);
-    this.editor.documentBuffer.applyOperation(incomingOp);
+    this.editor.documentState.applyOperation(incomingOp);
 
     if (incomingOp.operation.type === 'insert') {
       this.editor.viewDispatch({

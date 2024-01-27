@@ -3,7 +3,7 @@ import {
   DecorationSet,
   EditorView,
   ViewPlugin,
-  WidgetType,
+  WidgetType
 } from '@codemirror/view';
 import { Annotation, RangeSet } from '@codemirror/state';
 import { TextSelection } from '../../model/models';
@@ -12,7 +12,7 @@ import { hashStringToColor } from '../../core/util/helpers';
 
 const highlight = (username: string) =>
   Decoration.mark({
-    attributes: { style: `background-color: ${hashStringToColor(username)}` },
+    attributes: { style: `background-color: ${hashStringToColor(username)}` }
   });
 
 export const usersCursorsExtension = (
@@ -45,8 +45,8 @@ export const usersCursorsExtension = (
                   value: Decoration.widget({
                     side: -1,
                     block: false,
-                    widget: new CursorWidget(selection.performedBy),
-                  }),
+                    widget: new CursorWidget(selection.performedBy)
+                  })
                 };
               });
 
@@ -55,7 +55,7 @@ export const usersCursorsExtension = (
                 return {
                   from: selection.from,
                   to: selection.to,
-                  value: highlight(selection.performedBy),
+                  value: highlight(selection.performedBy)
                 };
               }
             );
@@ -81,10 +81,10 @@ export const usersCursorsExtension = (
       }
     },
     {
-      decorations: (v) => v.decorations,
+      decorations: (v) => v.decorations
     }
   ),
-  cursorTheme,
+  cursorTheme
 ];
 
 const presenceAnnotation = Annotation.define();
@@ -105,11 +105,6 @@ class CursorWidget extends WidgetType {
     span.style.borderLeft = `3px solid ${hashStringToColor(this.username)}`;
     // span.textContent = this.username;
 
-    const tooltipAbove = document.createElement('div');
-    span.appendChild(tooltipAbove);
-    tooltipAbove.className = 'cm-tooltip-hover vibe-cursor-username';
-    tooltipAbove.textContent = this.username;
-
     span.appendChild(document.createElement('div'));
     return span;
   }
@@ -121,28 +116,19 @@ class CursorWidget extends WidgetType {
 
 const cursorTheme = EditorView.baseTheme({
   'cm-tooltip-hover': {
-    'user-select': 'none',
+    'user-select': 'none'
   },
 
   '.vibe-cursor': {
-    position: 'relative',
+    position: 'relative'
   },
   '.vibe-cursor > div': {
     position: 'absolute',
     top: '0',
     bottom: '0',
     left: '0',
-    right: '0',
+    right: '0'
     // borderLeft: '3px solid #66b',
     //borderRight: '1px solid black',
-  },
-  '.vibe-cursor-username': {
-    opacity: '0',
-    'z-index': '2',
-    background: 'white',
-    'border-radius': '5px',
-  },
-  '.vibe-cursor:hover .vibe-cursor-username': {
-    opacity: '1',
-  },
+  }
 });

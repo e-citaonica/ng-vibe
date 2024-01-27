@@ -25,6 +25,17 @@ export class DocumentState {
     return this._selections.asReadonly();
   }
 
+  clear() {
+    this._pendingChangesQueue.clear();
+    this.doc.set({
+      id: '',
+      content: 'Loading...',
+      name: 'Loading...',
+      revision: 0,
+      language: ''
+    });
+  }
+
   transformPendingOperationsAgainstIncomingOperation(incoming: TextOperation) {
     this._pendingChangesQueue.print();
     this._pendingChangesQueue.flatMap((value) => {

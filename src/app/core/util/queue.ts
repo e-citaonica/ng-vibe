@@ -38,6 +38,10 @@ export class Queue<T> {
     }
   }
 
+  clear() {
+    this.front = this.rear = null;
+  }
+
   flatMap(callbackfn: (value: T) => T[] | T) {
     if (this.isEmpty()) return;
 

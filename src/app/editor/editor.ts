@@ -61,6 +61,11 @@ export class Editor {
     this.view?.dispatch(...specs);
   }
 
+  setDocument(doc: Document) {
+    this.isDequeing = false;
+    this.documentState.clear();
+  }
+
   init(cm: ElementRef<HTMLDivElement>, doc: Document, injector: Injector) {
     this.documentState.doc.set(doc);
 
@@ -120,6 +125,7 @@ export class Editor {
     });
 
     this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
+      console.log('equeue', operation);
       this.documentState.enqueue({
         docId: this.documentState.doc().id,
         revision: this.documentState.doc().revision,
@@ -148,6 +154,8 @@ export class Editor {
       const fallback = (transaction as any).annotations.find(
         (annotation: any) => annotation.value.type === 'keyword'
       );
+      console.log('fallback', fallback);
+
       return fallback
         ? { origin: 'user', type: 'input', subtype: 'input.complete' }
         : { origin: 'dispatch' };
@@ -165,16 +173,26 @@ export class Editor {
     if (origin === 'dispatch') {
       return;
     }
+
     let insertedText = '';
     transaction.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+      console.log(_fromA, _toA, _fromB, _toB, inserted);
       insertedText = insertedText.concat(inserted.toString());
     });
-    const { from, to } = transaction.startState.selection.main;
+
+    const {
+      startState: {
+        doc,
+        selection: {
+          main: { from, to }
+        }
+      }
+    } = transaction;
+
+    console.log(type, subtype, from, to, insertedText);
 
     switch (type) {
       case 'select':
-        console.log('select');
-        const range = transaction.selection!.main;
         this.selection$.next({
           docId: this.documentState.doc().id,
           revision: this.documentState.doc().revision,
@@ -200,79 +218,48 @@ export class Editor {
         });
         break;
       case 'input':
-        subtype = subtype as EventSubtype<typeof type>;
-
-        let insertedText = '';
-        transaction.changes.iterChanges(
-          (_fromA, _toA, _fromB, _toB, inserted) => {
-            insertedText = insertedText.concat(inserted.toString());
-          }
-        );
-
-        switch (subtype) {
-          case 'input.type':
-            this.operation$.next({
-              type: 'insert',
-              position: from,
-              operand: insertedText,
-              length: insertedText.length
-            });
-            break;
-          case 'input.paste':
-            const overLen = to - from;
-            console.log('input.pase', overLen);
-            if (overLen > 0) {
+        transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+          const operand = inserted.toString();
+          console.log(fromA, toA, fromB, toB, inserted);
+          if (fromA !== toA) {
+            const replaced = doc.sliceString(fromA, toA);
+            if (operand.startsWith(replaced)) {
+              this.operation$.next({
+                type: 'insert',
+                position: toA,
+                operand: operand.substring(replaced.length),
+                length: operand.length - replaced.length
+              });
+            } else if (operand.endsWith(replaced)) {
+              this.operation$.next({
+                type: 'insert',
+                position: fromA - 1,
+                operand: operand.slice(0, -replaced.length),
+                length: operand.length - replaced.length
+              });
+            } else {
               this.operation$.next({
                 type: 'delete',
+                position: fromA,
                 operand: null,
-                position: from,
-                length: overLen
+                length: toA - fromA
+              });
+              this.operation$.next({
+                type: 'insert',
+                position: fromB,
+                operand: operand,
+                length: operand.length
               });
             }
+          } else {
             this.operation$.next({
               type: 'insert',
-              operand: insertedText!,
-              position: from,
-              length: insertedText.length
-            });
-            break;
-          case 'input.complete':
-            insertedText = '';
-            transaction.changes.iterChanges(
-              (_fromA, _toA, _fromB, _toB, inserted) => {
-                insertedText = insertedText.concat(
-                  inserted.toString().substring(_toA - _fromA)
-                );
-              }
-            );
-
-            this.operation$.next({
-              type: 'insert',
-              operand: insertedText,
-              length: insertedText.length,
-              position: from
-            });
-            break;
-          default:
-            const {
-              startState: { doc }
-            } = transaction;
-            const lineFrom = doc.lineAt(from);
-            const lineTo = doc.lineAt(to);
-
-            let position = from;
-            if (lineFrom !== lineTo && !lineFrom.text.trim().length) {
-              position = lineFrom.from;
-              insertedText = '\n';
-            }
-
-            this.operation$.next({
-              type: 'insert',
-              position: position,
+              position: fromB,
               operand: insertedText,
               length: insertedText.length
             });
-        }
+          }
+        });
     }
   }
 

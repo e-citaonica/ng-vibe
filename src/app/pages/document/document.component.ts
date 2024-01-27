@@ -136,8 +136,16 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
         )
       )
       .subscribe((ack) => {
-        console.log(ack);
-        this.editor.ackHandler(ack);
+        if (ack.revision === -1) {
+          this.documentService
+            .get(this.editor.documentState.doc().id)
+            .subscribe((doc) => {
+              this.editor.setDocument(doc);
+            });
+        } else {
+          console.log(ack);
+          this.editor.ackHandler(ack);
+        }
       });
   }
 
@@ -154,7 +162,6 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(take(1))
       .subscribe(({ socketId, doc }) => {
         this.editor.init(this.cm, doc, this.injector);
-        this.editor.documentState.doc.set(doc);
       });
   }
 

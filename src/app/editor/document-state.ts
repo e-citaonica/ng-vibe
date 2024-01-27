@@ -17,11 +17,21 @@ export class DocumentState {
     id: '',
     content: 'Loading...',
     name: 'Loading...',
-    revision: -1,
+    revision: 0,
   });
 
   get selections() {
     return this._selections.asReadonly();
+  }
+
+  clear() {
+    this._pendingChangesQueue.clear();
+    this.doc.set({
+      id: '',
+      content: 'Loading...',
+      name: 'Loading...',
+      revision: 0,
+    });
   }
 
   transformPendingOperationsAgainstIncomingOperation(incoming: TextOperation) {

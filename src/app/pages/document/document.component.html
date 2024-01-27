@@ -1,9 +1,11 @@
 <div class="p-3">
   <div class="flex align-middle gap-2">
-    <button mat-raised-button color="primary" [routerLink]="'/home'">
-      <mat-icon>arrow_back</mat-icon>
-      Leave
-    </button>
+    <app-rt-button [routerLink]="'/home'">
+      <div class="flex items-center">
+        <mat-icon class="mr-1">arrow_back</mat-icon>
+        Leave
+      </div>
+    </app-rt-button>
     <h1>
       {{ editor.documentState.doc().name }}
     </h1>

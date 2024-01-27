@@ -124,7 +124,6 @@ export class Editor {
     });
 
     this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
-      console.log('equeue', operation);
       this.documentState.enqueue({
         docId: this.documentState.doc().id,
         revision: this.documentState.doc().revision,
@@ -173,31 +172,25 @@ export class Editor {
       return;
     }
 
-    let insertedText = '';
-    transaction.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
-      console.log(_fromA, _toA, _fromB, _toB, inserted);
-      insertedText = insertedText.concat(inserted.toString());
-    });
-
     const {
       startState: {
         doc,
         selection: {
-          main: { from, to }
+          main: { from, to, anchor }
         }
       }
     } = transaction;
 
-    console.log(type, subtype, from, to, insertedText);
-
     switch (type) {
       case 'select':
-        this.selection$.next({
-          docId: this.documentState.doc().id,
-          revision: this.documentState.doc().revision,
-          performedBy: localStorage.getItem('user')!,
-          from: from,
-          to: to
+        transaction.selection?.ranges.forEach(({ from, to }) => {
+          this.selection$.next({
+            docId: this.documentState.doc().id,
+            revision: this.documentState.doc().revision,
+            performedBy: localStorage.getItem('user')!,
+            from: from,
+            to: to
+          });
         });
         break;
       case 'delete':
@@ -254,8 +247,8 @@ export class Editor {
             this.operation$.next({
               type: 'insert',
               position: fromB,
-              operand: insertedText,
-              length: insertedText.length
+              operand: operand,
+              length: operand.length
             });
           }
         });

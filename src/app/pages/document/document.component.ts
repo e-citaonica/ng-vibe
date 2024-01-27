@@ -1,7 +1,7 @@
 import {
   OperationAck,
   OperationWrapper,
-  TextSelection,
+  TextSelection
 } from '../../model/models';
 import {
   AfterViewInit,
@@ -11,7 +11,7 @@ import {
   Injector,
   OnDestroy,
   ViewChild,
-  inject,
+  inject
 } from '@angular/core';
 export class AppModule {}
 import { HttpClient } from '@angular/common/http';
@@ -21,16 +21,16 @@ import { SocketIoService } from '../../services/socket-io.service';
 import { DocumentService } from '../../services/document.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, map, mergeMap, switchMap, take, takeUntil } from 'rxjs';
-import { AngularMaterialModule } from '../../angular-material.module';
 import { Editor } from '../../editor/editor';
-import { AnnotationType } from '@codemirror/state';
+import { MatIconModule } from '@angular/material/icon';
+import { RtButtonComponent } from '../../components/rt-button/rt-button.component';
 
 @Component({
   selector: 'app-document',
   standalone: true,
-  imports: [CommonModule, AngularMaterialModule, RouterModule],
+  imports: [CommonModule, RouterModule, MatIconModule, RtButtonComponent],
   templateUrl: './document.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DocumentComponent implements AfterViewInit, OnDestroy {
   http = inject(HttpClient);
@@ -55,16 +55,13 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((selection) => {
         this.editor.documentState.setSelection(selection);
-        // TODO: Something smarter than manual update trigger
-        this.editor?.viewDispatch();
+        this.editor.viewDispatch();
       });
 
     this.socketIOService.userLeave$
       .pipe(takeUntil(this.destroy$))
       .subscribe((payload) => {
-        // TODO: Username or socketId?
         this.editor.documentState.deleteSelection(payload.username);
-        // TODO: Something smarter than manual update trigger
         this.editor.viewDispatch();
       });
 
@@ -81,7 +78,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
 
         this.editor.documentState.doc.update((doc) => ({
           ...doc,
-          revision: incomingOp.revision,
+          revision: incomingOp.revision
         }));
 
         this.applyOperation(incomingOp);
@@ -100,7 +97,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           horizontalPosition: 'center',
           verticalPosition: 'top',
           duration: 3000,
-          panelClass: ['green-snackbar'],
+          panelClass: ['green-snackbar']
         });
       });
 
@@ -111,7 +108,7 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
           horizontalPosition: 'center',
           verticalPosition: 'top',
           duration: 3000,
-          panelClass: ['green-snackbar'],
+          panelClass: ['green-snackbar']
         });
 
         this.editor.documentState.deleteSelection(payload.sessionId);
@@ -179,16 +176,16 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       this.editor.viewDispatch({
         changes: {
           from: incomingOp.operation.position,
-          insert: incomingOp.operation.operand!,
-        },
+          insert: incomingOp.operation.operand!
+        }
       });
-    } //else {
-    //   this.editor.viewDispatch({
-    //     changes: {
-    //       from: incomingOp.operation.position,
-    //       to: incomingOp.operation.position + incomingOp.operation.length,
-    //     },
-    //   });
-    // }
+    } else {
+      this.editor.viewDispatch({
+        changes: {
+          from: incomingOp.operation.position,
+          to: incomingOp.operation.position + incomingOp.operation.length
+        }
+      });
+    }
   }
 }

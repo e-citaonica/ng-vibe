@@ -6,7 +6,7 @@ import {
   OperationAck,
   OperationWrapper,
   TextSelection,
-  UserInfo,
+  UserInfo
 } from '../model/models';
 
 export type SocketEvent =
@@ -18,11 +18,10 @@ export type SocketEvent =
   | 'user_left_doc';
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class SocketIoService {
   private socket: Socket | undefined;
-  private disconnect$ = new Subject<void>();
   private connect$ = new Subject<string>();
 
   public operation$ = new Subject<OperationWrapper>();
@@ -46,21 +45,22 @@ export class SocketIoService {
 
     this.socket = io(`${Constants.WS_URL}?docId=${docId}&username=${username}`);
 
-    this.disconnect$.complete();
-    this.disconnect$ = new Subject<void>();
-
     this.socket.on('connect', () => {
       console.log('Socket.IO connected:', this.socket!.id);
       this.connect$.next(this.socket!.id!);
+    });
+
+    this.socket.on('acknowledge', () => {
+      console.log('ack');
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('Socket.IO disconnect reason:', reason);
     });
 
-    this.setupSocketEvent(this.operation$, 'operation', (op) => {
-      console.log('Socket operation response:', op);
-    });
+    this.setupSocketEvent(this.operation$, 'operation', (op) =>
+      console.log('Socket operation response:', op)
+    );
     this.setupSocketEvent(this.selection$, 'selection');
     this.setupSocketEvent(this.userJoin$, 'user_joined_doc');
     this.setupSocketEvent(this.userLeave$, 'user_left_doc');

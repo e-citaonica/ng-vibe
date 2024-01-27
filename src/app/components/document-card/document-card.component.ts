@@ -1,4 +1,4 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { AngularMaterialModule } from '../../angular-material.module';
 import { Document } from '../../model/document.model';
 import { SlicePipe } from '@angular/common';
@@ -12,6 +12,5 @@ import { Router } from '@angular/router';
 })
 export class DocumentCardComponent {
   @Input('document') document!: Document;
-
-  router = inject(Router);
+  @Output('onClick') onClick = new EventEmitter<void>();
 }

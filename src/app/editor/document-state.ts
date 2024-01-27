@@ -62,6 +62,7 @@ export class DocumentState {
   }
 
   setSelection(selection: TextSelection) {
+    console.log(selection);
     this._selections.update(
       (selections) => new Map(selections.set(selection.performedBy, selection))
     );

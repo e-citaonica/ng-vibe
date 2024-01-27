@@ -1,11 +1,20 @@
 <form (ngSubmit)="onConfirm()" [formGroup]="form">
   <div
-    class="flex flex-col justify-between items-center max-h-[80vh] space-y-4" 
+    class="flex flex-col justify-between items-center max-h-[80vh] space-y-2 p-5"
   >
     <label for="name">Name</label>
-    <input formControlName="name" name="name" type="text" placeholder="Name" />
+    <input
+      type="text"
+      formControlName="name"
+      placeholder="Name"
+      class="border rounded-md p-2 focus:outline-none focus:border-blue-500 w-full"
+    />
     <label for="language">Language</label>
-    <select formControlName="language" name="language">
+    <select
+      formControlName="language"
+      name="language"
+      class="border rounded-md p-2 focus:outline-none focus:border-blue-500 w-full"
+    >
       @for (language of languages; track language.name) {
         <option [selected]="$first" value="{{ language.name }}">
           {{ language.name }}
@@ -14,7 +23,7 @@
     </select>
 
     <button
-      class="align-middle select-none text-center transition-all disabled:opacity-50 disabled:shadow-none disabled:pointer-events-none text-xs py-3 px-6 rounded-lg bg-gray-900 text-white shadow-md shadow-gray-900/10 hover:shadow-lg"
+      class="w-full align-middle select-none text-center transition-all disabled:opacity-50 disabled:shadow-none disabled:pointer-events-none text-xs py-3 px-6 rounded-lg bg-gray-900 text-white shadow-md shadow-gray-900/10 hover:shadow-lg"
       type="submit"
     >
       Submit

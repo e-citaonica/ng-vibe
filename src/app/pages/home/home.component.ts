@@ -9,6 +9,7 @@ import { DocumentCardComponent } from '../../components/document-card/document-c
 import { DocumentService } from '../../services/document.service';
 import { MatDialog } from '@angular/material/dialog';
 import { CreateDocumentDialogComponent } from '../../components/dialogs/create-document-dialog/create-document-dialog.component';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-home',
@@ -58,6 +59,7 @@ export class HomeComponent {
 
   documentService = inject(DocumentService);
   matDialog = inject(MatDialog);
+  router = inject(Router);
 
   constructor() {
     this.documentService.getAll().subscribe((docs) => this.documents.set(docs));

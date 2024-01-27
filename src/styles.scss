@@ -32,7 +32,7 @@ h2,
 h3,
 h4,
 h5 {
-  font-family: "Inter";
+  font-family: "Inter" !important;
 }
 
 html,
@@ -41,5 +41,5 @@ body {
 }
 body {
   margin: 0;
-  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-family: Inter, Roboto, "Helvetica Neue", sans-serif;
 }

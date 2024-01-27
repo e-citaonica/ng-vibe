@@ -29,3 +29,10 @@ export type UserInfo = {
   sessionId: string;
   username: string;
 };
+
+export type ProgrammingLanguage = {
+  id: number;
+  name: string;
+  codeTemplate: string;
+  codemirrorMode: string;
+};

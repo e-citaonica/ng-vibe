@@ -6,7 +6,7 @@ import {
   Prec,
   StateField,
   Transaction,
-  TransactionSpec,
+  TransactionSpec
 } from '@codemirror/state';
 import {
   lineNumbers,
@@ -18,7 +18,7 @@ import {
   crosshairCursor,
   highlightActiveLine,
   keymap,
-  ViewPlugin,
+  ViewPlugin
 } from '@codemirror/view';
 import { EditorView, basicSetup } from 'codemirror';
 import { usersCursorsExtension } from './extensions/selection-widget';
@@ -29,13 +29,13 @@ import {
   OperationAck,
   OperationWrapper,
   TextOperation,
-  TextSelection,
+  TextSelection
 } from '../model/models';
 import { Subject, takeUntil } from 'rxjs';
 import {
   selectionHover,
   selectionTooltipBaseTheme,
-  selectionTooltipField,
+  selectionTooltipField
 } from './extensions/selection-hover-tooltip';
 import { findFirstWholeWordFromLeft } from '../core/util/helpers';
 import {
@@ -44,13 +44,13 @@ import {
   EventType,
   eventSubtypes,
   eventTypeMap,
-  eventTypes,
+  eventTypes
 } from './model/event.type';
 import {
   indentMore,
   insertBlankLine,
   insertNewline,
-  lineComment,
+  lineComment
 } from '@codemirror/commands';
 
 export class Editor {
@@ -80,7 +80,7 @@ export class Editor {
       update: (value, tr) => {
         this.listenChangesUpdate(value, tr);
         return value + 5;
-      },
+      }
     });
 
     this.state = EditorState.create({
@@ -106,16 +106,16 @@ export class Editor {
           keymap.of([
             {
               key: 'Tab',
-              run: indentMore,
-            },
+              run: indentMore
+            }
           ])
-        ),
+        )
         // TODO: Tooltips on hover
         // [
         //   selectionTooltipField(this.documentBuffer.selections),
         //   selectionTooltipBaseTheme,
         // ],
-      ],
+      ]
     });
 
     this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
@@ -123,7 +123,7 @@ export class Editor {
         docId: this.documentState.doc().id,
         revision: this.documentState.doc().revision,
         performedBy: localStorage.getItem('user')!,
-        operation,
+        operation
       });
 
       this.documentState.transformSelectionsAgainstIncomingOperation(operation);
@@ -136,7 +136,7 @@ export class Editor {
 
     this.view = new EditorView({
       state: this.state,
-      parent: cm.nativeElement,
+      parent: cm.nativeElement
     });
   }
 
@@ -160,7 +160,7 @@ export class Editor {
     return {
       origin: 'user',
       type,
-      subtype: eventTypeMap[type].find((t) => transaction.isUserEvent(t)),
+      subtype: eventTypeMap[type].find((t) => transaction.isUserEvent(t))
     };
   }
 
@@ -184,7 +184,7 @@ export class Editor {
           revision: this.documentState.doc().revision,
           performedBy: localStorage.getItem('user')!,
           from: from,
-          to: to,
+          to: to
         });
         break;
       case 'delete':
@@ -200,7 +200,7 @@ export class Editor {
           length: Math.abs(length),
           operand: null,
           position: position,
-          type: 'delete',
+          type: 'delete'
         });
         break;
       case 'input':
@@ -219,7 +219,7 @@ export class Editor {
               type: 'insert',
               position: from,
               operand: insertedText,
-              length: insertedText.length,
+              length: insertedText.length
             });
             break;
           case 'input.paste':
@@ -230,14 +230,14 @@ export class Editor {
                 type: 'delete',
                 operand: null,
                 position: from,
-                length: overLen,
+                length: overLen
               });
             }
             this.operation$.next({
               type: 'insert',
               operand: insertedText!,
               position: from,
-              length: insertedText.length,
+              length: insertedText.length
             });
             break;
           case 'input.complete':
@@ -254,12 +254,12 @@ export class Editor {
               type: 'insert',
               operand: insertedText,
               length: insertedText.length,
-              position: from,
+              position: from
             });
             break;
           default:
             const {
-              startState: { doc },
+              startState: { doc }
             } = transaction;
             const lineFrom = doc.lineAt(from);
             const lineTo = doc.lineAt(to);
@@ -274,7 +274,7 @@ export class Editor {
               type: 'insert',
               position: position,
               operand: insertedText,
-              length: insertedText.length,
+              length: insertedText.length
             });
         }
     }
@@ -283,12 +283,12 @@ export class Editor {
   ackHandler(ackRevision: OperationAck) {
     this.documentState.doc.update((doc) => ({
       ...doc,
-      revision: ackRevision.revision,
+      revision: ackRevision.revision
     }));
 
     this.documentState.updatePendingOperations((value) => ({
       ...value,
-      revision: ackRevision.revision,
+      revision: ackRevision.revision
     }));
 
     if (!this.documentState.hasPending()) {

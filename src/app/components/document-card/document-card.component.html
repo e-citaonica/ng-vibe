@@ -1,1 +1,27 @@
-<p>document-card works!</p>
+<hr />
+<div
+  class="relative flex flex-col mt-6 text-gray-700 bg-white shadow-md bg-clip-border rounded-xl w-96"
+>
+  <div class="p-6">
+    <mat-icon>description</mat-icon>
+    <h2 class="block mb-2 text-xl antialiased leading-snug tracking-normal">
+      {{ document.name }}
+    </h2>
+    <p class="block text-base antialiased leading-relaxed text-inherit">
+      {{
+        document.content.length > 10
+          ? (document.content | slice: 0 : 10) + "..."
+          : document.content
+      }}
+    </p>
+  </div>
+  <div class="p-6 pt-0">
+    <button
+      class="align-middle select-none text-center transition-all disabled:opacity-50 disabled:shadow-none disabled:pointer-events-none text-xs py-3 px-6 rounded-lg bg-gray-900 text-white shadow-md shadow-gray-900/10 hover:shadow-lg"
+      type="button"
+      (click)="this.router.navigate(['/document/' + document.id])"
+    >
+      Open
+    </button>
+  </div>
+</div>

@@ -28,7 +28,7 @@ export class CreateDocumentDialogComponent {
       nonNullable: true,
       validators: [Validators.required]
     }),
-    language: new FormControl(this.languages[0].id, {
+    language: new FormControl(this.languages[0].name, {
       nonNullable: true,
       validators: [Validators.required]
     })

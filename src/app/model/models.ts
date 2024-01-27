@@ -31,8 +31,7 @@ export type UserInfo = {
 };
 
 export type ProgrammingLanguage = {
-  id: number;
+  alias: string;
   name: string;
   codeTemplate: string;
-  codemirrorMode: string;
 };

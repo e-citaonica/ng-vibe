@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import {
   OperationWrapper,
   TextOperation,
-  TextSelection,
+  TextSelection
 } from '../model/models';
 import { Document } from '../model/document.model';
 import { transformOperation } from '../core/transformations/operation-transformations';
@@ -18,6 +18,7 @@ export class DocumentState {
     content: 'Loading...',
     name: 'Loading...',
     revision: -1,
+    language: ''
   });
 
   get selections() {
@@ -29,7 +30,7 @@ export class DocumentState {
     this._pendingChangesQueue.flatMap((value) => {
       return transformOperation(value.operation, incoming).map((op) => ({
         ...value,
-        op,
+        op
       }));
     });
     this._pendingChangesQueue.print();
@@ -79,7 +80,7 @@ export class DocumentState {
         if (mergedOp !== null) {
           this._pendingChangesQueue.updateLast({
             ...last,
-            operation: mergedOp,
+            operation: mergedOp
           });
         } else {
           this._pendingChangesQueue.enqueue(op);
@@ -106,7 +107,7 @@ export class DocumentState {
         type: op1.type,
         position: op1.position,
         operand: (op1.operand ?? '').concat(op2.operand ?? ''),
-        length: op1.length + op2.length,
+        length: op1.length + op2.length
       };
     } else if (
       op1.type === 'delete' &&
@@ -116,7 +117,7 @@ export class DocumentState {
         type: op1.type,
         position: op2.position,
         operand: null,
-        length: op1.length + op2.length,
+        length: op1.length + op2.length
       };
     }
 
@@ -130,7 +131,7 @@ export class DocumentState {
         revision: incomingOp.revision,
         performedBy: incomingOp.performedBy,
         from: incomingOp.operation.position + incomingOp.operation.length,
-        to: incomingOp.operation.position + incomingOp.operation.length,
+        to: incomingOp.operation.position + incomingOp.operation.length
       });
     } else {
       this.setSelection({
@@ -138,7 +139,7 @@ export class DocumentState {
         revision: incomingOp.revision,
         performedBy: incomingOp.performedBy,
         from: incomingOp.operation.position,
-        to: incomingOp.operation.position,
+        to: incomingOp.operation.position
       });
     }
   }

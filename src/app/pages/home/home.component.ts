@@ -23,31 +23,36 @@ export class HomeComponent {
       id: 'id',
       content: 'content',
       name: 'name 1',
-      revision: 1
+      revision: 1,
+      language: ''
     },
     {
       id: 'id',
       content: 'content',
       name: 'name 2',
-      revision: 1
+      revision: 1,
+      language: ''
     },
     {
       id: 'id',
       content: 'content',
       name: 'name 3',
-      revision: 1
+      revision: 1,
+      language: ''
     },
     {
       id: 'id',
       content: 'content',
       name: 'name 4',
-      revision: 1
+      revision: 1,
+      language: ''
     },
     {
       id: 'id',
       content: 'content',
       name: 'name 5',
-      revision: 1
+      revision: 1,
+      language: ''
     }
   ]);
 

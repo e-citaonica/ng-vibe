@@ -18,10 +18,10 @@ export class DocumentService {
     return this.http.get<Document[]>(`${Constants.API_URL}/document`);
   }
 
-  create(name: string, languageId: number) {
+  create(name: string, language: string) {
     return this.http.post<Document>(
       `${Constants.API_URL}/document`,
-      { name, languageId },
+      { name, language },
       Constants.HTTP_OPTIONS
     );
   }

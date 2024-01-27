@@ -6,8 +6,8 @@
     <input formControlName="name" name="name" type="text" placeholder="Name" />
     <label for="language">Language</label>
     <select formControlName="language" name="language">
-      @for (language of languages; track language.id) {
-        <option [selected]="$first" value="{{ language.id }}">
+      @for (language of languages; track language.name) {
+        <option [selected]="$first" value="{{ language.name }}">
           {{ language.name }}
         </option>
       }

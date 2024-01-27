@@ -13,7 +13,7 @@ export namespace Constants {
   };
   export const PROGRAMMING_LANGUAGES: ProgrammingLanguage[] = [
     {
-      id: 50,
+      alias: 'c',
       name: 'C',
       codeTemplate: `
     #include <stdio.h>
@@ -28,11 +28,10 @@ export namespace Constants {
     
       printf("%s", text);
       return 0;
-    }`,
-      codemirrorMode: 'text/x-csrc'
+    }`
     },
     {
-      id: 51,
+      alias: 'csharp',
       name: 'C#',
       codeTemplate: `
     using System;
@@ -43,11 +42,10 @@ export namespace Constants {
         string s = Console.ReadLine();
         Console.WriteLine(s);
       }
-    }`,
-      codemirrorMode: 'text/x-csharp'
+    }`
     },
     {
-      id: 54,
+      alias: 'cpp',
       name: 'C++',
       codeTemplate: `
     #include <iostream>
@@ -61,11 +59,10 @@ export namespace Constants {
       std::cout << text;
     
       return 0;
-    }`,
-      codemirrorMode: 'text/x-c++src'
+    }`
     },
     {
-      id: 62,
+      alias: 'java',
       name: 'Java',
       codeTemplate: `
     import java.util.Scanner;
@@ -77,22 +74,20 @@ export namespace Constants {
         
         System.out.println(s);
       }
-    }`,
-      codemirrorMode: 'text/x-java'
+    }`
     },
     {
-      id: 63,
+      alias: 'javascript',
       name: 'JavaScript (node)',
       codeTemplate: `
     const fs = require('fs');
     const text = fs.readFileSync(0, 'utf-8');
     
     console.log(text);  
-    `,
-      codemirrorMode: 'text/javascript'
+    `
     },
     {
-      id: 71,
+      alias: 'python',
       name: 'Python',
       codeTemplate: `
     text = input()
@@ -100,8 +95,7 @@ export namespace Constants {
     
     
     print(text)
-        `,
-      codemirrorMode: 'text/x-python'
+        `
     }
   ];
 }

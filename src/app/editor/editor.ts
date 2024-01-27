@@ -1,9 +1,9 @@
-import { javascript } from '@codemirror/lang-javascript';
+import { languages } from '@codemirror/language-data';
+
 import {
-  Annotation,
-  AnnotationType,
   EditorState,
   Prec,
+  StateEffect,
   StateField,
   Transaction,
   TransactionSpec
@@ -17,14 +17,13 @@ import {
   rectangularSelection,
   crosshairCursor,
   highlightActiveLine,
-  keymap,
-  ViewPlugin
+  keymap
 } from '@codemirror/view';
 import { EditorView, basicSetup } from 'codemirror';
 import { usersCursorsExtension } from './extensions/selection-widget';
 import { DocumentState } from './document-state';
 import { Document } from '../model/document.model';
-import { ElementRef, Injector } from '@angular/core';
+import { ElementRef, Injector, effect } from '@angular/core';
 import {
   OperationAck,
   OperationWrapper,
@@ -32,31 +31,21 @@ import {
   TextSelection
 } from '../model/models';
 import { Subject, takeUntil } from 'rxjs';
-import {
-  selectionHover,
-  selectionTooltipBaseTheme,
-  selectionTooltipField
-} from './extensions/selection-hover-tooltip';
-import { findFirstWholeWordFromLeft } from '../core/util/helpers';
+import { selectionHover } from './extensions/selection-hover-tooltip';
 import {
   EventDescriptor,
   EventSubtype,
-  EventType,
-  eventSubtypes,
   eventTypeMap,
   eventTypes
 } from './model/event.type';
-import {
-  indentMore,
-  insertBlankLine,
-  insertNewline,
-  lineComment
-} from '@codemirror/commands';
+import { indentMore } from '@codemirror/commands';
 
 export class Editor {
   private view!: EditorView;
   private state!: EditorState;
   private listenChangesExtension!: StateField<number>;
+
+  language = '';
 
   private isDequeing = false;
 
@@ -75,47 +64,59 @@ export class Editor {
   init(cm: ElementRef<HTMLDivElement>, doc: Document, injector: Injector) {
     this.documentState.doc.set(doc);
 
+    this.language = doc.language;
+    this.language = 'C#'; // TODO: Delete this
+
+    const language = languages.find((l) => l.name === this.language)!;
+
+    language.load().then((languageSupport) => {
+      this.state = EditorState.create({
+        doc: doc.content,
+        extensions: [
+          basicSetup,
+          lineNumbers(),
+          highlightActiveLineGutter(),
+          highlightSpecialChars(),
+          drawSelection(),
+          dropCursor(),
+          // TODO: Multiple selections
+          // EditorState.allowMultipleSelections.of(true),
+          rectangularSelection(),
+          crosshairCursor(),
+          highlightActiveLine(),
+          languageSupport.extension,
+          lineNumbers(),
+          this.listenChangesExtension,
+          usersCursorsExtension(injector, this.documentState.selections),
+          selectionHover(this.documentState.selections),
+          Prec.highest(
+            keymap.of([
+              {
+                key: 'Tab',
+                run: indentMore
+              }
+            ])
+          )
+          // TODO: Tooltips on hover
+          // [
+          //   selectionTooltipField(this.documentBuffer.selections),
+          //   selectionTooltipBaseTheme,
+          // ],
+        ]
+      });
+
+      this.view = new EditorView({
+        state: this.state,
+        parent: cm.nativeElement
+      });
+    });
+
     this.listenChangesExtension = StateField.define({
       create: () => 0,
       update: (value, tr) => {
         this.listenChangesUpdate(value, tr);
         return value + 5;
       }
-    });
-
-    this.state = EditorState.create({
-      doc: doc.content,
-      extensions: [
-        basicSetup,
-        lineNumbers(),
-        highlightActiveLineGutter(),
-        highlightSpecialChars(),
-        drawSelection(),
-        dropCursor(),
-        // TODO: Multiple selections
-        // EditorState.allowMultipleSelections.of(true),
-        rectangularSelection(),
-        crosshairCursor(),
-        highlightActiveLine(),
-        javascript({ typescript: true }),
-        lineNumbers(),
-        this.listenChangesExtension,
-        usersCursorsExtension(injector, this.documentState.selections),
-        selectionHover(this.documentState.selections),
-        Prec.highest(
-          keymap.of([
-            {
-              key: 'Tab',
-              run: indentMore
-            }
-          ])
-        )
-        // TODO: Tooltips on hover
-        // [
-        //   selectionTooltipField(this.documentBuffer.selections),
-        //   selectionTooltipBaseTheme,
-        // ],
-      ]
     });
 
     this.operation$.pipe(takeUntil(this.onDispose$)).subscribe((operation) => {
@@ -132,11 +133,6 @@ export class Editor {
         this.isDequeing = true;
         this.dequeuedOperation$.next(this.documentState.dequeue());
       }
-    });
-
-    this.view = new EditorView({
-      state: this.state,
-      parent: cm.nativeElement
     });
   }
 

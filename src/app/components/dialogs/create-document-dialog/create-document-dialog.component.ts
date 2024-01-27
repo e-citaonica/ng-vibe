@@ -8,6 +8,7 @@ import {
 } from '@angular/forms';
 import { DocumentService } from '../../../services/document.service';
 import { Router } from '@angular/router';
+import { MatDialogRef } from '@angular/material/dialog';
 
 @Component({
   selector: 'app-create-document-dialog',
@@ -18,6 +19,7 @@ import { Router } from '@angular/router';
 export class CreateDocumentDialogComponent {
   documentService = inject(DocumentService);
   router = inject(Router);
+  dialogRef = inject(MatDialogRef<CreateDocumentDialogComponent>);
 
   languages = Constants.PROGRAMMING_LANGUAGES;
 
@@ -36,6 +38,7 @@ export class CreateDocumentDialogComponent {
     const { name, language } = this.form.getRawValue();
     this.documentService.create(name, language).subscribe((doc) => {
       this.router.navigate(['/document/' + doc.id]);
+      this.dialogRef.close();
     });
   }
 }

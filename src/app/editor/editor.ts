@@ -38,7 +38,7 @@ import {
   eventTypeMap,
   eventTypes
 } from './model/event.type';
-import { indentMore } from '@codemirror/commands';
+import { indentMore, insertTab } from '@codemirror/commands';
 
 export class Editor {
   private view!: EditorView;
@@ -87,7 +87,6 @@ export class Editor {
           // TODO: Multiple selections
           // EditorState.allowMultipleSelections.of(true),
           rectangularSelection(),
-          crosshairCursor(),
           highlightActiveLine(),
           languageSupport.extension,
           lineNumbers(),
@@ -98,7 +97,7 @@ export class Editor {
             keymap.of([
               {
                 key: 'Tab',
-                run: indentMore
+                run: insertTab
               }
             ])
           )

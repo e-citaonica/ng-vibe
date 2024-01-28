@@ -3,7 +3,6 @@ import { languages } from '@codemirror/language-data';
 import {
   EditorState,
   Prec,
-  StateEffect,
   StateField,
   Transaction,
   TransactionSpec
@@ -15,7 +14,6 @@ import {
   drawSelection,
   dropCursor,
   rectangularSelection,
-  crosshairCursor,
   highlightActiveLine,
   keymap
 } from '@codemirror/view';
@@ -23,7 +21,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { usersCursorsExtension } from './extensions/selection-widget';
 import { DocumentState } from './document-state';
 import { Document } from '../model/document.model';
-import { ElementRef, Injector, effect } from '@angular/core';
+import { ElementRef, Injector } from '@angular/core';
 import {
   OperationAck,
   OperationWrapper,
@@ -38,7 +36,7 @@ import {
   eventTypeMap,
   eventTypes
 } from './model/event.type';
-import { indentMore, insertTab } from '@codemirror/commands';
+import { insertTab } from '@codemirror/commands';
 
 export class Editor {
   private view!: EditorView;
@@ -84,8 +82,6 @@ export class Editor {
           highlightSpecialChars(),
           drawSelection(),
           dropCursor(),
-          // TODO: Multiple selections
-          // EditorState.allowMultipleSelections.of(true),
           rectangularSelection(),
           highlightActiveLine(),
           languageSupport.extension,
@@ -101,11 +97,6 @@ export class Editor {
               }
             ])
           )
-          // TODO: Tooltips on hover
-          // [
-          //   selectionTooltipField(this.documentBuffer.selections),
-          //   selectionTooltipBaseTheme,
-          // ],
         ]
       });
 

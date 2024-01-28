@@ -2,7 +2,7 @@
   <div
     class="flex flex-col justify-between items-center max-h-[80vh] space-y-2 p-5"
   >
-    <label for="name">Name</label>
+    <label for="name">Document name</label>
     <input
       type="text"
       formControlName="name"
@@ -16,7 +16,7 @@
       class="border rounded-md p-2 focus:outline-none focus:border-blue-500 w-full"
     >
       @for (language of languages; track language.name) {
-        <option [selected]="$first" value="{{ language.name }}">
+        <option [selected]="$first" [value]="language.name">
           {{ language.name }}
         </option>
       }

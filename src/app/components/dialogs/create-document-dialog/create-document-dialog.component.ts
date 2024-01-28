@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, EventEmitter, Output, inject } from '@angular/core';
 import { Constants } from '../../../../constants';
 import {
   FormControl,
@@ -10,6 +10,12 @@ import { DocumentService } from '../../../services/document.service';
 import { Router } from '@angular/router';
 import { MatDialogRef } from '@angular/material/dialog';
 
+export interface CreateDocumentModel {
+  success: true;
+  name: string;
+  language: string;
+}
+
 @Component({
   selector: 'app-create-document-dialog',
   standalone: true,
@@ -17,6 +23,8 @@ import { MatDialogRef } from '@angular/material/dialog';
   templateUrl: './create-document-dialog.component.html'
 })
 export class CreateDocumentDialogComponent {
+  @Output('onSubmit') onSubmit = new EventEmitter<CreateDocumentModel>();
+
   documentService = inject(DocumentService);
   router = inject(Router);
   dialogRef = inject(MatDialogRef<CreateDocumentDialogComponent>);
@@ -36,9 +44,9 @@ export class CreateDocumentDialogComponent {
 
   onConfirm() {
     const { name, language } = this.form.getRawValue();
-    this.documentService.create(name, language).subscribe((doc) => {
-      this.router.navigate(['/document/' + doc.id]);
-      this.dialogRef.close();
-    });
+    if (!language || !name) {
+      return;
+    }
+    this.dialogRef.close({ name, language });
   }
 }

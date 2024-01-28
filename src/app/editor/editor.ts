@@ -68,7 +68,6 @@ export class Editor {
     this.documentState.doc.set(doc);
 
     this.language = doc.language;
-    this.language = 'C#'; // TODO: Delete this
 
     const language = languages.find((l) => l.name === this.language)!;
 

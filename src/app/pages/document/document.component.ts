@@ -188,4 +188,14 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       });
     }
   }
+
+  copyToClipboard() {
+    navigator.clipboard.writeText(window.location.href);
+    this.snackbar.open(`Copied to clipboard`, 'Info', {
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+      duration: 3000,
+      panelClass: ['green-snackbar']
+    });
+  }
 }

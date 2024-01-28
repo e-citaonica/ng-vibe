@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 @Component({
   selector: 'app-rt-button',
@@ -8,4 +8,5 @@ import { Component, Input } from '@angular/core';
 })
 export class RtButtonComponent {
   @Input('type') type: 'submit' | 'button' | 'menu' | 'rest' = 'button';
+  @Output('onClick') onClick = new EventEmitter<void>();
 }

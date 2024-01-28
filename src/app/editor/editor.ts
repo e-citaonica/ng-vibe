@@ -62,13 +62,13 @@ export class Editor {
   setDocument(doc: Document) {
     this.isDequeing = false;
     this.documentState.clear();
+    this.documentState.doc.set(doc);
   }
 
   init(cm: ElementRef<HTMLDivElement>, doc: Document, injector: Injector) {
     this.documentState.doc.set(doc);
 
     this.language = doc.language;
-    this.language = 'C#'; // TODO: Delete this
 
     const language = languages.find((l) => l.name === this.language)!;
 

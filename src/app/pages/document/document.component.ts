@@ -154,9 +154,9 @@ export class DocumentComponent implements AfterViewInit, OnDestroy {
       .pipe(
         mergeMap((socketId) =>
           this.documentService.get(id).pipe(map((doc) => ({ socketId, doc })))
-        )
+        ),
+        takeUntil(this.destroy$)
       )
-      .pipe(take(1))
       .subscribe(({ socketId, doc }) => {
         this.editor.init(this.cm, doc, this.injector);
       });

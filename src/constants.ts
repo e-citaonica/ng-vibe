@@ -78,7 +78,7 @@ export namespace Constants {
     },
     {
       alias: 'javascript',
-      name: 'JavaScript (node)',
+      name: 'JavaScript',
       codeTemplate: `
     const fs = require('fs');
     const text = fs.readFileSync(0, 'utf-8');

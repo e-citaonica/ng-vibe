@@ -1,9 +1,9 @@
-import { Operation } from './operations';
+import { TextOperation as TextOperation } from '../../model/models';
 
-export function transformOperation(
-  op1: Operation,
-  op2: Operation
-): Operation[] {
+export const transformOperation = (
+  op1: TextOperation,
+  op2: TextOperation
+): TextOperation[] => {
   if (op1.type === 'insert' && op2.type === 'insert') {
     return [transformII(op1, op2)];
   } else if (op1.type === 'insert' && op2.type === 'delete') {
@@ -15,9 +15,9 @@ export function transformOperation(
   } else {
     throw new Error('Transform failed');
   }
-}
+};
 
-function transformII(op1: Operation, op2: Operation): Operation {
+const transformII = (op1: TextOperation, op2: TextOperation): TextOperation => {
   const newPos =
     op1.position < op2.position ? op1.position : op1.position + op2.length;
   return {
@@ -26,9 +26,9 @@ function transformII(op1: Operation, op2: Operation): Operation {
     position: newPos,
     length: op1.length,
   };
-}
+};
 
-function transformID(op1: Operation, op2: Operation): Operation {
+const transformID = (op1: TextOperation, op2: TextOperation): TextOperation => {
   const op2End = op2.position + op2.length - 1;
   if (op1.position <= op2.position) {
     return {
@@ -52,9 +52,12 @@ function transformID(op1: Operation, op2: Operation): Operation {
       length: op1.length,
     };
   }
-}
+};
 
-function transformDI(op1: Operation, op2: Operation): Operation[] {
+const transformDI = (
+  op1: TextOperation,
+  op2: TextOperation
+): TextOperation[] => {
   const op1End = op1.position + op1.length - 1;
   if (op1.position < op2.position) {
     if (op1End < op2.position) {
@@ -97,9 +100,9 @@ function transformDI(op1: Operation, op2: Operation): Operation[] {
       },
     ];
   }
-}
+};
 
-function transformDD(op1: Operation, op2: Operation): Operation {
+const transformDD = (op1: TextOperation, op2: TextOperation): TextOperation => {
   const op1End = op1.position + op1.length - 1;
   const op2End = op2.position + op2.length - 1;
 
@@ -137,4 +140,4 @@ function transformDD(op1: Operation, op2: Operation): Operation {
   } else {
     return op1;
   }
-}
+};

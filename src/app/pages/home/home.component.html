@@ -1,0 +1,28 @@
+<div class="p-2">
+  <div class="mb-2">
+    <button
+      class="align-middle select-none text-center transition-all disabled:opacity-50 disabled:shadow-none disabled:pointer-events-none text-xs py-3 px-6 rounded-lg bg-gray-900 text-white shadow-md shadow-gray-900/10 hover:shadow-lg"
+      type="button"
+      (click)="openCreateDocumentDialog()"
+    >
+      Create new document
+    </button>
+  </div>
+
+  <div class="flex flex-row flex-wrap gap-4">
+    @for (document of this.documents(); track document.id) {
+      @defer {
+        <app-document-card
+          [document]="document"
+          (onClick)="this.router.navigate(['/document/' + document.id])"
+        ></app-document-card>
+      } @placeholder {
+        Placeholder
+      } @loading {
+        Loading...
+      } @error {
+        Something went wrong :(
+      }
+    }
+  </div>
+</div>

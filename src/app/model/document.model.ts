@@ -3,4 +3,5 @@ export type Document = {
   name: string;
   content: string;
   revision: number;
+  language: string;
 };

@@ -39,7 +39,7 @@ export class DocumentState {
   transformPendingOperationsAgainstIncomingOperation(incoming: TextOperation) {
     this._pendingChangesQueue.print();
     this._pendingChangesQueue.flatMap((value) => {
-      return transformOperation(value.operation, incoming).map((op) => ({
+      return transformOperation(incoming, value.operation).map((op) => ({
         ...value,
         op
       }));
